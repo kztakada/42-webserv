@@ -1,0 +1,9 @@
+objs
+*.o
+
+google_test
+googletest-release-1.11.0
+-h
+
+webserv
+tester

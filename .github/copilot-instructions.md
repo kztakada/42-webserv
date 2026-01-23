@@ -49,11 +49,11 @@ webserv - C++98で書かれたシンプルなHTTPサーバー
 - **メンバ変数**: 末尾にアンダースコア（例: `event_manager_`, `config_`, `phase_`）
 - **定数**: `k` プレフィックス + パスカルケース（例: `kCgiTimeoutSeconds`, `kRequestLine`）
 - **列挙型**: パスカルケース、値は大文字スネークケース（例: `ParsingPhase`, `OK`, `ERROR`, `BAD_REQUEST`）
-- **名前空間**: 小文字（例: `webserv`, `http`, `utils`）
+- **名前空間**: 小文字（例: `server`, `http`, `utils`）
 
 ### 3. 名前空間構成
 ```cpp
-namespace webserv           // プロジェクトルート名前空間
+namespace server           // プロジェクトルート名前空間
 namespace http              // HTTP プロトコル関連
 namespace utils             // ユーティリティ
   namespace result          // Result型の実装
@@ -71,7 +71,7 @@ namespace utils             // ユーティリティ
 4. プロジェクト内ヘッダー（相対パスで指定）
 
 ```cpp
-#include "webserv/server.hpp"  // 対応するヘッダー
+#include "server/server.hpp"  // 対応するヘッダー
 #include <iostream>            // 標準ライブラリ
 #include <csignal>             // システムヘッダー
 #include "http/http_request.hpp"  // プロジェクト内
@@ -198,7 +198,7 @@ srcs/
   http/                 - HTTP プロトコル層
   network/              - 共通ネットワーク関連（ソケット操作など）
   utils/                - 汎用ユーティリティ（Result型など）
-  webserv/              - サーバー実装
+  server/              - サーバー実装
     config/              - サーバー起動設定ファイル関連
     reactor/            - イベントリアクタ実装（FdEventライフサイクル管理）
     request_router/     - リクエストルーティング（仮想サーバー、ロケーション）

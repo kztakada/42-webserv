@@ -1,10 +1,10 @@
 #include <iostream>
 
+#include "server/config/parser/config_parser.hpp"
+#include "server/server.hpp"
 #include "utils/result.hpp"
-#include "webserv/config/parser/config_parser.hpp"
-#include "webserv/server.hpp"
 
-using namespace webserv;
+using namespace server;
 using namespace utils::result;
 
 int main(int argc, char* argv[])

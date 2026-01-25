@@ -8,14 +8,23 @@
 #include <string>
 #include <vector>
 
-// RFC 7230 Section 3.2: ヘッダーフィールド名は大文字小文字を区別しない
+// RFC 9110（HTTP Semantics）の セクション 5.1:
+// ヘッダーフィールド名は大文字小文字を区別しない
 struct CaseInsensitiveCompare
 {
+    struct CharLess
+    {
+        bool operator()(unsigned char a, unsigned char b) const
+        {
+            return std::tolower(static_cast<int>(a)) <
+                   std::tolower(static_cast<int>(b));
+        }
+    };
+
     bool operator()(const std::string& lhs, const std::string& rhs) const
     {
-        return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(),
-            rhs.end(), [](unsigned char a, unsigned char b)
-            { return std::tolower(a) < std::tolower(b); });
+        return std::lexicographical_compare(
+            lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), CharLess());
     }
 };
 
@@ -42,25 +51,27 @@ struct CaseInsensitiveCompare
 namespace http
 {
 
-// RFC 7230に準拠したヘッダーフィールドの型
+// RFC 9110 セクション5.5 ~ セクション5.6:ヘッダーフィールドの型
 typedef std::map<std::string, std::vector<std::string>, CaseInsensitiveCompare>
     HeaderMap;
 
-// IANA Message Headers Registry準拠
-// RFC 7231, 7232, 7233, 7234, 7235等で定義された標準ヘッダーを表すクラス
+// IANA Hypertext Transfer Protocol (HTTP) Field Name Registry準拠
+// RFC 9110で定義された標準ヘッダーを表すクラス
 class HeaderName
 {
    public:
     // 1. Enum定義（クラス内部に隠蔽）
+    // RFC 9110 / 9112:
+    // 最も基本的かつ必須のセマンティクス（意味論）を持つヘッダーを選出
     enum Type
     {
         UNKNOWN,
-        // RFC 7231 - Semantics and Content
+        // Semantics and Content
         CONTENT_TYPE,
         CONTENT_ENCODING,
         CONTENT_LANGUAGE,
         CONTENT_LOCATION,
-        // RFC 7230 - Message Syntax and Routing
+        // Message Syntax and Routing
         HOST,
         CONNECTION,
         TRANSFER_ENCODING,
@@ -68,37 +79,37 @@ class HeaderName
         TE,
         TRAILER,
         UPGRADE,
-        // RFC 7231 - Request Headers
+        // Request Headers
         ACCEPT,
         ACCEPT_CHARSET,
         ACCEPT_ENCODING,
         ACCEPT_LANGUAGE,
         USER_AGENT,
         REFERER,
-        // RFC 7231 - Response Headers
+        // Response Headers
         ALLOW,
         LOCATION,
         SERVER,
-        // RFC 7232 - Conditional Requests
+        // Conditional Requests
         ETAG,
         LAST_MODIFIED,
         IF_MATCH,
         IF_NONE_MATCH,
         IF_MODIFIED_SINCE,
         IF_UNMODIFIED_SINCE,
-        // RFC 7233 - Range Requests
+        // Range Requests
         ACCEPT_RANGES,
         RANGE,
         CONTENT_RANGE,
-        // RFC 7234 - Caching
+        // Caching
         CACHE_CONTROL,
         EXPIRES,
         PRAGMA,
         AGE,
-        // RFC 7235 - Authentication
+        // Authentication
         AUTHORIZATION,
         WWW_AUTHENTICATE,
-        // RFC 6265 - HTTP State Management (Cookies)
+        // HTTP State Management (Cookies)
         COOKIE,
         SET_COOKIE,
         // その他の一般的なヘッダー
@@ -345,12 +356,39 @@ class HeaderName
     {
         if (name == NULL)
             return false;
-        // RFC 7230: ヘッダー名は可視ASCIIのみ
+        if (*name == '\0')
+            return false;
+
+        // RFC 9110: field-name = token
+        // token は 1 文字以上の tchar の並び
+        // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" /
+        //         "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
         for (const char* p = name; *p; ++p)
         {
             unsigned char c = static_cast<unsigned char>(*p);
-            if (c <= 32 || c >= 127 || c == ':')
-                return false;
+            if (std::isalnum(c))
+                continue;
+            switch (c)
+            {
+                case '!':
+                case '#':
+                case '$':
+                case '%':
+                case '&':
+                case '\'':
+                case '*':
+                case '+':
+                case '-':
+                case '.':
+                case '^':
+                case '_':
+                case '`':
+                case '|':
+                case '~':
+                    break;
+                default:
+                    return false;
+            }
         }
         return true;
     }

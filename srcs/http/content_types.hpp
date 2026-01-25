@@ -9,11 +9,12 @@ namespace http
 {
 
 // IANA Media Types Registry準拠
-// RFC 2046で定義されたMIMEタイプを表すクラス
+// MIMEタイプを表すクラス
 class ContentType
 {
    public:
     // 1. Enum定義（クラス内部に隠蔽）
+    // モダンなWeb開発において、ブラウザとサーバーの間でやり取りされる頻度が最も高い標準的なメディアタイプ
     enum Type
     {
         UNKNOWN,

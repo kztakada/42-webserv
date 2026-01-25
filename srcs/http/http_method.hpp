@@ -7,11 +7,13 @@
 namespace http
 {
 
-// RFC 7231 Section 4で定義されたHTTPメソッドを表すクラス
+// RFC9110, Section 16.1.1で定義されたHTTPメソッドを表すクラス
 class HttpMethod
 {
    public:
     // 1. Enum定義（クラス内部に隠蔽）
+    // 必須部分（GET,POST,DELETE）とRFC9110/9112の標準部分は定義
+    // それ以外はUNKOWNとする
     enum Type
     {
         GET,

@@ -10,7 +10,7 @@ namespace http
 {
 
 // IANA HTTP Status Code Registry準拠
-// RFC 7231等で定義されたHTTPステータスコードを表すクラス
+// RFC9110, Section 16.2.1: 定義されたHTTPステータスコードを表すクラス
 class HttpStatus
 {
    public:

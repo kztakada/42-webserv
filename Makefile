@@ -48,7 +48,7 @@ GTEST_ALL   := $(GTEST_DIR)/gtest/gtest-all.cc
 TEST_SRCS   := $(shell [ -d $(TEST_DIR) ] && find $(TEST_DIR) -type f -name '*.cpp')
 # ユニットテストで必要な本体コード(.cpp)だけを指定してリンクする
 # 例: make test TEST_PROD_SRCS='srcs/http/http_request.cpp'
-TEST_PROD_SRCS ?= srcs/http/http_request.cpp
+TEST_PROD_SRCS ?= srcs/http/http_request.cpp srcs/http/syntax.cpp
 TEST_PROD_OBJS := $(TEST_PROD_SRCS:%.cpp=$(OBJS_DIR)/%.o)
 TEST_OBJS      := $(TEST_PROD_OBJS) $(TEST_SRCS:%.cpp=$(OBJS_DIR)/%.o)
 TEST_DEPENDENCIES \

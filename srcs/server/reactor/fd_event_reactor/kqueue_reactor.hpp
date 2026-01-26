@@ -9,29 +9,25 @@
 
 namespace server
 {
+using namespace utils::result;
 
 class KqueueFdEventReactor : public FdEventReactor
 {
    public:
     KqueueFdEventReactor();
-    ~KqueueFdEventReactor() override;
+    virtual ~KqueueFdEventReactor();
 
-    Result<void> add(FdSession* session) override;
-    void remove(FdSession* session) override;
-    void setWatchedEvents(FdSession* session, unsigned int events) override;
-    void addWatchedEvents(FdSession* session, unsigned int events) override;
-    void removeWatchedEvents(FdSession* session, unsigned int events) override;
-    void setTimeout(FdSession* session, long timeout_ms) override;
-    Result<std::vector<FdEvent>> waitFdEvents(int timeout_ms = 0) override;
-    std::vector<FdEvent> getTimeoutEvents() override;
-    FdSession* findByFd(int fd) const override;
+    // 管理するイベントの追加・削除
+    virtual Result<void> addWatch(FdEvent fd_event);
+    virtual Result<void> removeWatch(FdEvent fd_event);
+
+    // イベント待機
+    virtual Result<const std::vector<FdEvent>&> waitEvents(int timeout_ms = 0);
 
    private:
     int kq_;  // kqueueファイルディスクリプタ
-    std::map<int, FdSession*> sessions_;
 
-    void updateEvents(FdSession* session);
-
+    // コピー禁止
     KqueueFdEventReactor(const KqueueFdEventReactor&);
     KqueueFdEventReactor& operator=(const KqueueFdEventReactor&);
 };

@@ -14,24 +14,21 @@ class SelectFdEventReactor : public FdEventReactor
 {
    public:
     SelectFdEventReactor();
-    ~SelectFdEventReactor() override;
+    virtual ~SelectFdEventReactor();
 
-    Result<void> add(FdSession* session) override;
-    void remove(FdSession* session) override;
-    void setWatchedEvents(FdSession* session, unsigned int events) override;
-    void addWatchedEvents(FdSession* session, unsigned int events) override;
-    void removeWatchedEvents(FdSession* session, unsigned int events) override;
-    void setTimeout(FdSession* session, long timeout_ms) override;
-    Result<std::vector<FdEvent>> waitFdEvents(int timeout_ms = 0) override;
-    std::vector<FdEvent> getTimeoutEvents() override;
-    FdSession* findByFd(int fd) const override;
+    // 管理するイベントの追加・削除
+    virtual Result<void> addWatch(FdEvent fd_event);
+    virtual Result<void> removeWatch(FdEvent fd_event);
+
+    // イベント待機
+    virtual Result<const std::vector<FdEvent>&> waitEvents(int timeout_ms = 0);
 
    private:
-    std::map<int, FdSession*> sessions_;
     int max_fd_;
 
     void updateMaxFd();
 
+    // コピー禁止
     SelectFdEventReactor(const SelectFdEventReactor&);
     SelectFdEventReactor& operator=(const SelectFdEventReactor&);
 };

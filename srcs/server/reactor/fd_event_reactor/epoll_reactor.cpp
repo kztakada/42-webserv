@@ -1,170 +1,129 @@
+#include "server/reactor/fd_event_reactor/epoll_reactor.hpp"
+
 #include <unistd.h>
 
 #include <cassert>
 
-#include "server/server_detail/fd_event_manager_detail/epoll_fd_event_manager.hpp"
-#include "utils/time.hpp"
-
 namespace server
 {
-namespace server_detail
-{
-namespace detail
-{
+using namespace utils::result;
 
-EpollFdEventReactor::EpollFdEventReactor() : epfd_(epoll_create1(EPOLL_CLOEXEC))
+EpollFdEventReactor::EpollFdEventReactor()
+    : epoll_fd_(epoll_create1(EPOLL_CLOEXEC))
 {
-    if (epfd_ < 0)
+    if (epoll_fd_ < 0)
     {
         throw std::runtime_error("epoll_create1 failed");
     }
 }
 
-EpollFdEventReactor::~EpollFdEventReactor() { close(epfd_); }
-
-Result<void> EpollFdEventReactor::add(FdSession* session)
+EpollFdEventReactor::~EpollFdEventReactor()
 {
-    assert(sessions_.find(session->fd) == sessions_.end());
+    clearAllEvents();
+    close(epoll_fd_);
+}
 
-    struct epoll_event ev = toEpollEvent(session);
+Result<void> EpollFdEventReactor::addWatch(FdEvent fd_event)
+{
+    int fd = fd_event.fd;
+    int operation = EPOLL_CTL_ADD;
+    uint32_t register_events = 0;
+    if (fd_event.type == kErrorEvent || fd_event.type == kTimeoutEvent)
+        return Result<void>(ERROR, "addWatch: invalid event type");
 
-    if (epoll_ctl(epfd_, EPOLL_CTL_ADD, session->fd, &ev) < 0)
-        return Result<void>(ERROR, "epoll_ctl ADD failed");
+    if (event_registry_.find(fd) == event_registry_.end())
+    {
+        FdWatch* new_watch = new FdWatch(fd, fd_event.events, fd_event.session);
+        event_registry_[fd] = new_watch;
+        register_events = new_watch->events;
+    }
+    else
+    {
+        FdWatch* existing_watch = event_registry_[fd];
+        uint32_t new_events = existing_watch->events | fd_event.events;
+        existing_watch->events = new_events;
+        operation = EPOLL_CTL_MOD;
+        register_events = new_events;
+    }
 
-    sessions_[session->fd] = session;
+    struct epoll_event ev;
+    ev.events = 0;
+    ev.data.ptr = static_cast<void*>(event_registry_[fd]);
+
+    if (register_events & kReadEvent)
+        ev.events |= EPOLLIN;
+    if (register_events & kWriteEvent)
+        ev.events |= EPOLLOUT;
+    ev.events |= EPOLLRDHUP;  // ハーフclose検出
+
+    if (epoll_ctl(epoll_fd_, operation, fd, &ev) < 0)
+        return Result<void>(ERROR, "addWatch: epoll_ctl failed");
+
     return Result<void>();
 }
 
-void EpollFdEventReactor::remove(FdSession* session)
+Result<void> EpollFdEventReactor::removeWatch(FdEvent fd_event)
 {
-    sessions_.erase(session->fd);
-    epoll_ctl(epfd_, EPOLL_CTL_DEL, session->fd, NULL);
+    int fd = fd_event.fd;
+    int operation = EPOLL_CTL_MOD;
+    if (event_registry_.find(fd) == event_registry_.end())
+        return Result<void>(ERROR, "removeWatch: fd not found");
+
+    FdWatch* existing_watch = event_registry_[fd];
+    uint32_t new_events = existing_watch->events & (~fd_event.events);
+    void* ev = NULL;
+    if (new_events == 0 || new_events == kErrorEvent ||
+        new_events == kTimeoutEvent ||
+        new_events == (kErrorEvent | kTimeoutEvent))
+    {
+        delete existing_watch;
+        event_registry_.erase(fd);
+        operation = EPOLL_CTL_DEL;
+    }
+    else
+    {
+        existing_watch->events = new_events;
+        struct epoll_event event;
+        event.events = 0;
+        event.data.ptr = static_cast<void*>(existing_watch);
+        if (new_events & kReadEvent)
+            event.events |= EPOLLIN;
+        if (new_events & kWriteEvent)
+            event.events |= EPOLLOUT;
+        event.events |= EPOLLRDHUP;  // ハーフclose検出
+        ev = &event;
+    }
+    if (epoll_ctl(epoll_fd_, operation, fd, ev) < 0)
+        return Result<void>(ERROR, "removeWatch: epoll_ctl failed");
+
+    return Result<void>();
 }
 
-void EpollFdEventReactor::setWatchedEvents(
-    FdSession* session, unsigned int events)
+Result<const std::vector<FdEvent>&> EpollFdEventReactor::waitFdEvents(
+    int timeout_ms)
 {
-    session->watched_events = events;
+    struct epoll_event events[kMaxFetchFdEvents];
 
-    struct epoll_event ev = toEpollEvent(session);
-    epoll_ctl(epfd_, EPOLL_CTL_MOD, session->fd, &ev);
-}
-
-void EpollFdEventReactor::addWatchedEvents(
-    FdSession* session, unsigned int events)
-{
-    setWatchedEvents(session, session->watched_events | events);
-}
-
-void EpollFdEventReactor::removeWatchedEvents(
-    FdSession* session, unsigned int events)
-{
-    setWatchedEvents(session, session->watched_events & ~events);
-}
-
-void EpollFdEventReactor::setTimeout(FdSession* session, long timeout_ms)
-{
-    session->timeout_ms = timeout_ms;
-}
-
-Result<std::vector<FdEvent>> EpollFdEventReactor::waitFdEvents(int timeout_ms)
-{
-    const int kMaxEvents = 64;
-    struct epoll_event events[kMaxEvents];
-
-    int nfds = epoll_wait(epfd_, events, kMaxEvents, timeout_ms);
+    int nfds = epoll_wait(epoll_fd_, events, kMaxFetchFdEvents, timeout_ms);
     if (nfds < 0)
     {
-        return Result<std::vector<FdEvent>>(ERROR, "epoll_wait failed");
+        return Result<const std::vector<FdEvent>&>(ERROR, "epoll_wait failed");
     }
 
-    std::vector<FdEvent> fd_events;
+    occurred_events_.clear();
     for (int i = 0; i < nfds; ++i)
     {
-        int fd = events[i].data.fd;
-        FdSession* session = findByFd(fd);
-        if (session)
+        FdWatch* watch = static_cast<FdWatch*>(events[i].data.ptr);
+        bool is_opposite_close = (events[i].events & EPOLLRDHUP) != 0;
+        std::vector<FdEvent> fd_events =
+            watch->makeFdEvents(events[i].events, is_opposite_close);
+        for (size_t j = 0; j < fd_events.size(); ++j)
         {
-            FdEvent event = fromEpollEvent(session, events[i]);
-            if (event.triggered_events != 0)
-            {
-                fd_events.push_back(event);
-            }
+            occurred_events_.push_back(fd_events[j]);
         }
     }
 
-    return Result<std::vector<FdEvent>>(fd_events);
+    return occurred_events_;
 }
 
-std::vector<FdEvent> EpollFdEventReactor::getTimeoutEvents()
-{
-    long current_time = utils::getCurrentTimeMs();
-    std::vector<FdEvent> timeout_events;
-
-    for (std::map<int, FdSession*>::iterator it = sessions_.begin();
-        it != sessions_.end(); ++it)
-    {
-        FdSession* session = it->second;
-        if (session->isTimedOut(current_time))
-        {
-            FdEvent event;
-            event.session = session;
-            event.triggered_events = kTimeoutEvent;
-            timeout_events.push_back(event);
-        }
-    }
-
-    return timeout_events;
-}
-
-FdSession* EpollFdEventReactor::findByFd(int fd) const
-{
-    std::map<int, FdSession*>::const_iterator it = sessions_.find(fd);
-    return (it != sessions_.end()) ? it->second : NULL;
-}
-
-struct epoll_event EpollFdEventReactor::toEpollEvent(FdSession* session) const
-{
-    struct epoll_event ev;
-    ev.events = 0;
-    ev.data.fd = session->fd;
-
-    if (session->watched_events & kReadEvent)
-    {
-        ev.events |= EPOLLIN;
-    }
-    if (session->watched_events & kWriteEvent)
-    {
-        ev.events |= EPOLLOUT;
-    }
-    ev.events |= EPOLLRDHUP;
-
-    return ev;
-}
-
-FdEvent EpollFdEventReactor::fromEpollEvent(
-    FdSession* session, const struct epoll_event& ev) const
-{
-    FdEvent event;
-    event.session = session;
-    event.triggered_events = 0;
-
-    if ((ev.events & EPOLLIN) && (session->watched_events & kReadEvent))
-    {
-        event.triggered_events |= kReadEvent;
-    }
-    if ((ev.events & EPOLLOUT) && (session->watched_events & kWriteEvent))
-    {
-        event.triggered_events |= kWriteEvent;
-    }
-    if (ev.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP))
-    {
-        event.triggered_events |= kReadEvent | kErrorEvent;
-    }
-
-    return event;
-}
-
-}  // namespace detail
-}  // namespace server_detail
 }  // namespace server

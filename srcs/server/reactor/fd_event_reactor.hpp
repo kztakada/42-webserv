@@ -12,31 +12,34 @@ namespace server
 
 using namespace utils::result;
 
+const int kMaxFetchFdEvents = 64;
+
 // イベントマネージャーの抽象インターフェース
 class FdEventReactor
 {
    protected:
-    std::map<int, FdEvent*> event_registry_;
-    std::vector<std::pair<FdEvent*, uint32_t>> occurred_events_;
+    std::map<int, FdWatch*> event_registry_;  // fd と監視中イベントの対応表
+    std::vector<FdEvent> occurred_events_;    // 発生したイベントのリスト
 
    public:
     virtual ~FdEventReactor() {}
 
     // イベント待機
-    virtual Result<std::vector<std::pair<FdEvent*, uint32_t>>> waitEvents(
+    virtual Result<const std::vector<FdEvent>&> waitEvents(
         int timeout_ms = 0) = 0;
 
     // 管理するイベントの追加・削除
-    virtual Result<void> updateEvent(FdEvent fd_event, uint32_t events) = 0;
-    virtual void removeEvent(int fd) = 0;
+    virtual Result<void> addWatch(FdEvent fd_event) = 0;
+    virtual Result<void> removeWatch(FdEvent fd_event) = 0;
     void clearAllEvents()
     {
-        for (std::map<int, FdEvent*>::iterator it = event_registry_.begin();
+        for (std::map<int, FdWatch*>::iterator it = event_registry_.begin();
             it != event_registry_.end(); ++it)
         {
             delete it->second;
         }
         event_registry_.clear();
+        occurred_events_.clear();
     }
 };
 

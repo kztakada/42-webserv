@@ -9,28 +9,23 @@
 
 namespace server
 {
+using namespace utils::result;
 
 class EpollFdEventReactor : public FdEventReactor
 {
    public:
     EpollFdEventReactor();
-    ~EpollFdEventReactor() override;
+    virtual ~EpollFdEventReactor();
 
-    Result<void> add(FdEvent* fd_event) override;
-    void remove(FdEvent* fd_event) override;
-    void setTimeout(FdSession* session, long timeout_ms) override;
-    Result<std::vector<FdEvent>> waitFdEvents(int timeout_ms = 0) override;
-    std::vector<FdEvent> getTimeoutEvents() override;
-    FdSession* findByFd(int fd) const override;
+    // 管理するイベントの追加・削除
+    virtual Result<void> addWatch(FdEvent fd_event);
+    virtual Result<void> removeWatch(FdEvent fd_event);
+
+    // イベント待機
+    virtual Result<const std::vector<FdEvent>&> waitEvents(int timeout_ms = 0);
 
    private:
-    int epfd_;                            // epollファイルディスクリプタ
-    std::map<int, FdSession*> sessions_;  // fd -> session
-
-    // epoll_eventへの変換
-    struct epoll_event toEpollEvent(FdSession* session) const;
-    FdEvent fromEpollEvent(
-        FdSession* session, const struct epoll_event& ev) const;
+    int epoll_fd_;
 
     // コピー禁止
     EpollFdEventReactor(const EpollFdEventReactor&);

@@ -19,6 +19,7 @@ class SelectFdEventReactor : public FdEventReactor
     // 管理するイベントの追加・削除
     virtual Result<void> addWatch(FdEvent fd_event);
     virtual Result<void> removeWatch(FdEvent fd_event);
+    virtual Result<void> deleteWatch(int fd);  // 途中解除(接続中止)用途
 
     // イベント待機
     virtual Result<const std::vector<FdEvent>&> waitEvents(int timeout_ms = 0);

@@ -1,10 +1,12 @@
 #ifndef WEBSERV_FD_EVENT_REACTOR_HPP_
 #define WEBSERV_FD_EVENT_REACTOR_HPP_
 
+#include <stdint.h>
+
 #include <map>
 #include <vector>
 
-#include "server/reactor/fd_event.hpp"
+#include "server/reactor/fd_watch.hpp"
 #include "utils/result.hpp"
 
 namespace server
@@ -21,6 +23,20 @@ class FdEventReactor
     std::map<int, FdWatch*> event_registry_;  // fd と監視中イベントの対応表
     std::vector<FdEvent> occurred_events_;    // 発生したイベントのリスト
 
+    Result<uint32_t> fdEventTypeToMask(FdEventType type) const
+    {
+        switch (type)
+        {
+            case kReadEvent:
+                return kReadEventMask;
+            case kWriteEvent:
+                return kWriteEventMask;
+            default:
+                break;
+        }
+        return Result<uint32_t>(ERROR, "invalid event type for watch");
+    }
+
    public:
     virtual ~FdEventReactor() {}
 
@@ -31,6 +47,7 @@ class FdEventReactor
     // 管理するイベントの追加・削除
     virtual Result<void> addWatch(FdEvent fd_event) = 0;
     virtual Result<void> removeWatch(FdEvent fd_event) = 0;
+    virtual Result<void> deleteWatch(int fd) = 0;  // 途中解除(接続中止)用途
     void clearAllEvents()
     {
         for (std::map<int, FdWatch*>::iterator it = event_registry_.begin();

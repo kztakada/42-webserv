@@ -9,54 +9,59 @@
 
 #include "http/http_method.hpp"
 #include "http/status.hpp"
+#include "server/value_types.hpp"
+#include "utils/result.hpp"
 
 namespace server
 {
-
+using utils::result::Result;
 // serverディレクティブ内のlocationディレクティブの情報
 struct LocationDirectiveConf
 {
-    typedef std::string PagePath;
-    typedef std::map<http::HttpStatus, PagePath> ErrorPagesMap;
+    typedef std::map<http::HttpStatus, TargetURI> ErrorPagesMap;
+    typedef std::map<CgiExt, FilePath> CgiExtensionsMap;
 
-    std::string path_pattern;
+    URIPath path_pattern;
     bool is_backward_search;
     std::set<http::HttpMethod> allowed_methods;
+    bool has_allowed_methods;
     unsigned long client_max_body_size;
-    std::string root_dir;
-    std::vector<PagePath> index_pages;
-    bool is_cgi;
-    std::string cgi_executor;
+    bool has_client_max_body_size;
+    FilePath root_dir;
+    bool has_root_dir;
+    std::vector<FileName> index_pages;
+    bool has_index_pages;
+    CgiExtensionsMap cgi_extensions;
     ErrorPagesMap error_pages;
+    bool has_error_pages;
     bool auto_index;  // ディレクトリ内ファイル一覧ページを有効にするかどうか
-    std::string redirect_url;  // returnディレクティブで指定されたURL
+    bool has_auto_index;
+    http::HttpStatus
+        redirect_status;     // returnディレクティブで指定されたステータス
+    TargetURI redirect_url;  // returnディレクティブで指定されたURL
+    FilePath upload_store;   // upload_storeディレクティブで指定された保存先
 
     // デフォルト値での初期化
-    LocationDirectiveConf()
-        : is_backward_search(false),
-          client_max_body_size(1024 * 1024),  // 1MB
-          is_cgi(false),
-          auto_index(false)
-    {
-    }
+    LocationDirectiveConf();
+
+    // --- 仕様チェック込みの登録API（パーサーから利用する想定） ---
+    Result<void> setPathPattern(const std::string& path_pattern_str);
+    Result<void> setIsBackwardSearch(bool is_backward_search);
+    Result<void> appendAllowedMethod(const http::HttpMethod& method);
+    Result<void> setClientMaxBodySize(unsigned long size);
+    Result<void> setRootDir(const std::string& root_dir_str);
+    Result<void> appendIndexPage(const std::string& filename_str);
+    Result<void> appendCgiExtension(
+        const std::string& cgi_ext_str, const std::string& cgi_path_str);
+    Result<void> appendErrorPage(
+        http::HttpStatus status, const std::string& page_url_str);
+    Result<void> setAutoIndex(bool auto_index);
+    Result<void> setRedirect(
+        http::HttpStatus status, const std::string& redirect_url_str);
+    Result<void> setUploadStore(const std::string& upload_store_str);
 
     // バリデーション（データの整合性チェック）
-    bool isValid() const
-    {
-        if (root_dir.empty() && redirect_url.empty())
-        {
-            return false;
-        }
-        if (client_max_body_size > INT_MAX)
-        {
-            return false;
-        }
-        if (is_cgi ^ !cgi_executor.empty())
-        {
-            return false;
-        }
-        return true;
-    }
+    bool isValid() const;
 };
 
 }  // namespace server

@@ -3,31 +3,29 @@
 
 #include <arpa/inet.h>
 
-#include <sstream>
 #include <string>
+
+#include "utils/result.hpp"
 
 // getaddrinfo()などの標準ライブラリのインターフェースに合わせている｡
 // サービス名("http")などは受け付けず､数値での指定のみ
 class PortType
 {
    public:
-    PortType() : port_str_("") {}
-    PortType(const sockaddr_in& addr)
-    {
-        // sockaddr_inからポート番号への変換
-        std::ostringstream oss;
-        oss << ntohs(addr.sin_port);
-        port_str_ = oss.str();
-    }
-    PortType(const std::string& port_str) : port_str_(port_str)
-    {
-        // 追加のバリデーションが必要ならここに書く
-    }
-    const std::string& toString() const { return port_str_; }
+    PortType();
+    PortType(const sockaddr_in& addr);
 
-    const bool empty() const { return port_str_.empty(); }
+    // サービス名("http")などは受け付けず､数値での指定のみ
+    static utils::result::Result<PortType> parseNumeric(
+        const std::string& port_str);
+
+    const std::string& toString() const;
+
+    bool empty() const;
 
    private:
+    explicit PortType(const std::string& port_str);
+
     std::string port_str_;
 };
 

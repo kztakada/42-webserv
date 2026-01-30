@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "server/config/virtual_server_conf.hpp"
+#include "utils/result.hpp"
 
 namespace server
 {
@@ -14,21 +15,8 @@ struct ServerConfig
     std::vector<VirtualServerConf> servers;
 
     ServerConfig() : servers() {}
-    bool isValid() const
-    {
-        if (servers.empty())
-        {
-            return false;
-        }
-        for (size_t i = 0; i < servers.size(); ++i)
-        {
-            if (!servers[i].isValid())
-            {
-                return false;
-            }
-        }
-        return true;
-    }
+    utils::result::Result<void> appendServer(const VirtualServerConf& server);
+    bool isValid() const;
 };
 
 }  // namespace server

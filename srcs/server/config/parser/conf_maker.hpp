@@ -7,9 +7,11 @@
 #include "http/status.hpp"
 #include "server/config/location_directive_conf.hpp"
 #include "server/config/virtual_server_conf.hpp"
+#include "utils/result.hpp"
 
 namespace server
 {
+using utils::result::Result;
 
 // locationディレクティブの設定を構築するビルダークラス
 class LocationDirectiveConfMaker
@@ -21,51 +23,62 @@ class LocationDirectiveConfMaker
     LocationDirectiveConfMaker() : conf_() {}
 
     // Setter群（パース用）
-    void setPathPattern(const std::string& path_pattern)
+    Result<void> setPathPattern(const std::string& path_pattern)
     {
-        conf_.path_pattern = path_pattern;
+        return conf_.setPathPattern(path_pattern);
     }
 
-    void setIsBackwardSearch(bool is_backward_search)
+    Result<void> setIsBackwardSearch(bool is_backward_search)
     {
-        conf_.is_backward_search = is_backward_search;
+        return conf_.setIsBackwardSearch(is_backward_search);
     }
 
-    void appendAllowedMethod(const http::HttpMethod& method)
+    Result<void> appendAllowedMethod(const http::HttpMethod& method)
     {
-        conf_.allowed_methods.insert(method);
+        return conf_.appendAllowedMethod(method);
     }
 
-    void setClientMaxBodySize(unsigned long size)
+    Result<void> setClientMaxBodySize(unsigned long size)
     {
-        conf_.client_max_body_size = size;
+        return conf_.setClientMaxBodySize(size);
     }
 
-    void setRootDir(const std::string& root_dir) { conf_.root_dir = root_dir; }
-
-    void appendIndexPage(const LocationDirectiveConf::PagePath& filepath)
+    Result<void> setRootDir(const std::string& root_dir)
     {
-        conf_.index_pages.push_back(filepath);
+        return conf_.setRootDir(root_dir);
     }
 
-    void setIsCgi(bool is_cgi) { conf_.is_cgi = is_cgi; }
-
-    void setCgiExecutor(const std::string& cgi_executor)
+    Result<void> appendIndexPage(const FileName& filename)
     {
-        conf_.cgi_executor = cgi_executor;
+        return conf_.appendIndexPage(filename);
     }
 
-    void appendErrorPage(http::HttpStatus status,
-        const LocationDirectiveConf::PagePath& filepath)
+    Result<void> appendCgiExtension(
+        const std::string& extension, const std::string& executor_path)
     {
-        conf_.error_pages[status] = filepath;
+        return conf_.appendCgiExtension(extension, executor_path);
     }
 
-    void setAutoIndex(bool auto_index) { conf_.auto_index = auto_index; }
-
-    void setRedirectUrl(const std::string& redirect_url)
+    Result<void> appendErrorPage(
+        http::HttpStatus status, const TargetURI& page_url)
     {
-        conf_.redirect_url = redirect_url;
+        return conf_.appendErrorPage(status, page_url);
+    }
+
+    Result<void> setAutoIndex(bool auto_index)
+    {
+        return conf_.setAutoIndex(auto_index);
+    }
+
+    Result<void> setRedirect(
+        http::HttpStatus status, const std::string& redirect_url)
+    {
+        return conf_.setRedirect(status, redirect_url);
+    }
+
+    Result<void> setUploadStore(const std::string& upload_store)
+    {
+        return conf_.setUploadStore(upload_store);
     }
 
     // 構築完了（データを返す）
@@ -84,24 +97,41 @@ class VirtualServerConfMaker
    public:
     VirtualServerConfMaker() : conf_() {}
 
-    void setListenIp(const std::string& listen_ip)
+    Result<void> appendListen(
+        const std::string& listen_ip, const std::string& listen_port)
     {
-        conf_.listen_ip = listen_ip;
+        return conf_.appendListen(listen_ip, listen_port);
     }
 
-    void setListenPort(const PortType& listen_port)
+    Result<void> appendServerName(const std::string& server_name)
     {
-        conf_.listen_port = listen_port;
+        return conf_.appendServerName(server_name);
     }
 
-    void appendServerName(const std::string& server_name)
+    Result<void> setRootDir(const std::string& root_dir)
     {
-        conf_.server_names.insert(server_name);
+        return conf_.setRootDir(root_dir);
     }
 
-    void appendLocation(const LocationDirectiveConf& location)
-    {  // ← LocationConf（データ）
-        conf_.locations.push_back(location);
+    Result<void> appendIndexPage(const FileName& filename)
+    {
+        return conf_.appendIndexPage(filename);
+    }
+
+    Result<void> setClientMaxBodySize(unsigned long size)
+    {
+        return conf_.setClientMaxBodySize(size);
+    }
+
+    Result<void> appendErrorPage(
+        http::HttpStatus status, const TargetURI& page_url)
+    {
+        return conf_.appendErrorPage(status, page_url);
+    }
+
+    Result<void> appendLocation(const LocationDirectiveConf& location)
+    {
+        return conf_.appendLocation(location);
     }
 
     VirtualServerConf build() const { return conf_; }

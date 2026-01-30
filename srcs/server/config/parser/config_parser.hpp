@@ -63,6 +63,9 @@ class ConfigParser
         // location_set_directives_を参照し､そのディレクティブが今見ているlocation内で既にセットされたかどうかを返す
         bool isDirectiveSetInLocation(const std::string& directive) const;
 
+        void clearLocationSetDirectives();
+        void markDirectiveSetInLocation(const std::string& directive);
+
        private:
         const std::string& file_content_;
         size_t& buf_idx_;

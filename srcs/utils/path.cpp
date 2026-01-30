@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <vector>
 
 namespace utils
@@ -180,6 +181,205 @@ static Result<std::string> normalizePhysicalAbsolutePath_(
         }
     }
     return Result<std::string>(out);
+}
+
+static bool isUnderRootPhysical_(
+    const std::string& root_physical, const std::string& cur_physical)
+{
+    if (root_physical.empty() || root_physical[0] != '/')
+    {
+        return false;
+    }
+    if (root_physical == "/")
+    {
+        return !cur_physical.empty() && cur_physical[0] == '/';
+    }
+    if (cur_physical == root_physical)
+    {
+        return true;
+    }
+    if (cur_physical.size() <= root_physical.size())
+    {
+        return false;
+    }
+    if (cur_physical.compare(0, root_physical.size(), root_physical) != 0)
+    {
+        return false;
+    }
+    return cur_physical[root_physical.size()] == '/';
+}
+
+static Result<void> validateUriPathForUnderRoot_(const std::string& uri_path)
+{
+    if (uri_path.empty() || uri_path[0] != '/')
+    {
+        return Result<void>(ERROR, "uri path must start with '/'");
+    }
+    if (containsNul_(uri_path))
+    {
+        return Result<void>(ERROR, "uri path contains NUL");
+    }
+    return Result<void>();
+}
+
+static std::vector<std::string> splitUriSegments_(const std::string& uri_path)
+{
+    std::vector<std::string> out;
+    std::string token;
+    for (size_t i = 0; i <= uri_path.size(); ++i)
+    {
+        const char c = (i < uri_path.size()) ? uri_path[i] : '/';
+        if (c == '/')
+        {
+            if (!token.empty())
+            {
+                out.push_back(token);
+            }
+            token.clear();
+        }
+        else
+        {
+            token += c;
+        }
+    }
+    return out;
+}
+
+Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
+    const std::string& uri_path, bool allow_nonexistent_leaf)
+{
+    if (root_dir.empty())
+    {
+        return Result<PhysicalPath>(ERROR, "root_dir is empty");
+    }
+    Result<void> v = validateUriPathForUnderRoot_(uri_path);
+    if (v.isError())
+    {
+        return Result<PhysicalPath>(ERROR, v.getErrorMessage());
+    }
+
+    // 元の cwd を保存
+    Result<std::string> original_cwd = getCurrentWorkingDirectory();
+    if (original_cwd.isError())
+    {
+        return Result<PhysicalPath>(ERROR, "failed to get cwd");
+    }
+
+    // root_dir へ移動し、root の物理パスを確定
+    if (::chdir(root_dir.str().c_str()) != 0)
+    {
+        return Result<PhysicalPath>(ERROR, "failed to chdir to root_dir");
+    }
+    Result<std::string> root_physical = getCurrentWorkingDirectory();
+    if (root_physical.isError())
+    {
+        (void)::chdir(original_cwd.unwrap().c_str());
+        return Result<PhysicalPath>(ERROR, "failed to get physical root cwd");
+    }
+
+    std::vector<std::string> segments = splitUriSegments_(uri_path);
+
+    for (size_t i = 0; i < segments.size(); ++i)
+    {
+        const std::string& seg = segments[i];
+        const bool is_last = (i + 1 == segments.size());
+
+        if (seg == "." || seg == "..")
+        {
+            (void)::chdir(original_cwd.unwrap().c_str());
+            return Result<PhysicalPath>(ERROR, "uri path contains dot segment");
+        }
+
+        struct stat st;
+        if (::stat(seg.c_str(), &st) != 0)
+        {
+            if (allow_nonexistent_leaf && is_last)
+            {
+                Result<std::string> cur_physical = getCurrentWorkingDirectory();
+                (void)::chdir(original_cwd.unwrap().c_str());
+                if (cur_physical.isError() ||
+                    !isUnderRootPhysical_(
+                        root_physical.unwrap(), cur_physical.unwrap()))
+                {
+                    return Result<PhysicalPath>(
+                        ERROR, "path escapes root_dir (physical)");
+                }
+                // leaf は存在しないが、親ディレクトリが root
+                // 配下であることは保証済み
+                Result<PhysicalPath> leaf =
+                    PhysicalPath::resolveWithCwd(seg, cur_physical.unwrap());
+                if (leaf.isError())
+                {
+                    return Result<PhysicalPath>(ERROR, leaf.getErrorMessage());
+                }
+                return leaf;
+            }
+
+            (void)::chdir(original_cwd.unwrap().c_str());
+            return Result<PhysicalPath>(ERROR, "path component does not exist");
+        }
+
+        const bool is_dir = (st.st_mode & S_IFDIR) != 0;
+        if (is_dir)
+        {
+            if (::chdir(seg.c_str()) != 0)
+            {
+                (void)::chdir(original_cwd.unwrap().c_str());
+                return Result<PhysicalPath>(ERROR, "failed to chdir component");
+            }
+            Result<std::string> cur_physical = getCurrentWorkingDirectory();
+            if (cur_physical.isError() ||
+                !isUnderRootPhysical_(
+                    root_physical.unwrap(), cur_physical.unwrap()))
+            {
+                (void)::chdir(original_cwd.unwrap().c_str());
+                return Result<PhysicalPath>(
+                    ERROR, "path escapes root_dir (physical)");
+            }
+            continue;
+        }
+
+        // ファイルなど (非ディレクトリ)
+        if (!is_last)
+        {
+            (void)::chdir(original_cwd.unwrap().c_str());
+            return Result<PhysicalPath>(
+                ERROR, "non-directory component in the middle of path");
+        }
+
+        Result<std::string> cur_physical = getCurrentWorkingDirectory();
+        (void)::chdir(original_cwd.unwrap().c_str());
+        if (cur_physical.isError() ||
+            !isUnderRootPhysical_(
+                root_physical.unwrap(), cur_physical.unwrap()))
+        {
+            return Result<PhysicalPath>(
+                ERROR, "path escapes root_dir (physical)");
+        }
+        Result<PhysicalPath> leaf =
+            PhysicalPath::resolveWithCwd(seg, cur_physical.unwrap());
+        if (leaf.isError())
+        {
+            return Result<PhysicalPath>(ERROR, leaf.getErrorMessage());
+        }
+        return leaf;
+    }
+
+    // "uri_path == /" のケース
+    (void)::chdir(original_cwd.unwrap().c_str());
+    Result<PhysicalPath> root_as_path =
+        PhysicalPath::resolve(root_physical.unwrap());
+    if (root_as_path.isError())
+    {
+        return Result<PhysicalPath>(ERROR, root_as_path.getErrorMessage());
+    }
+    return root_as_path;
+}
+
+Result<PhysicalPath> resolvePhysicalPathUnderRoot(
+    const PhysicalPath& root_dir, const std::string& uri_path)
+{
+    return resolvePhysicalPathUnderRoot(root_dir, uri_path, false);
 }
 
 Result<std::string> resolvePhysicalPathWithCwd(

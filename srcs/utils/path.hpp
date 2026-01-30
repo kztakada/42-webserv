@@ -51,6 +51,19 @@ utils::result::Result<std::string> resolvePhysicalPath(
 utils::result::Result<std::string> resolvePhysicalPathWithCwd(
     const std::string& path_str, const std::string& cwd);
 
+// root_dir をドキュメントルートとして、uri_path(例: "/images/a.png") を
+// 実ファイルシステム上で辿り、root_dir 配下に留まることを検証した上で
+// アクセス対象の物理パスを返す。
+// - symlink により途中で root_dir 外へ出る場合は ERROR を返す。
+// - uri_path の各セグメントに '.' や '..' が含まれる場合は ERROR。
+// - allow_nonexistent_leaf=true の場合、末尾要素が存在しなくても OK。
+utils::result::Result<PhysicalPath> resolvePhysicalPathUnderRoot(
+    const PhysicalPath& root_dir, const std::string& uri_path,
+    bool allow_nonexistent_leaf);
+
+utils::result::Result<PhysicalPath> resolvePhysicalPathUnderRoot(
+    const PhysicalPath& root_dir, const std::string& uri_path);
+
 }  // namespace path
 }  // namespace utils
 

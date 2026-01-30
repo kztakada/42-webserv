@@ -1,8 +1,10 @@
 #ifndef WEBSERV_SERVER_LOCATION_DIRECTIVE_HPP_
 #define WEBSERV_SERVER_LOCATION_DIRECTIVE_HPP_
 
+#include <cstddef>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "http/http_method.hpp"
 #include "server/config/location_directive_conf.hpp"
@@ -13,83 +15,54 @@ namespace server
 class LocationDirective
 {
    private:
-    const LocationDirectiveConf conf_;
+    LocationDirectiveConf conf_;
+
+    static bool forwardMatch_(
+        const std::string& path, const std::string& pattern);
+    static bool backwardMatch_(
+        const std::string& path, const std::string& pattern);
+    static std::string joinPath_(
+        const std::string& base, const std::string& leaf);
 
    public:
     // Configからの変換用コンストラクタ
     explicit LocationDirective(const LocationDirectiveConf& conf);
 
-    // Getter（データへのアクセス）
-    const std::string& getPathPattern() const { return conf_.path_pattern; }
-    bool getIsBackwardSearch() const { return conf_.is_backward_search; }
-    unsigned long getClientMaxBodySize() const
-    {
-        return conf_.client_max_body_size;
-    }
-    const std::string& getRootDir() const { return conf_.root_dir; }
-    bool getIsCgi() const { return conf_.is_cgi; }
-    std::string getCgiExecutor() const { return conf_.cgi_executor; }
-    bool getAutoIndex() const { return conf_.auto_index; }
-    const std::vector<LocationDirectiveConf::PagePath>& getIndexPages() const
-    {
-        return conf_.index_pages;
-    }
-    const LocationDirectiveConf::ErrorPagesMap& getErrorPages() const
-    {
-        return conf_.error_pages;
-    }
-    std::string getRedirectUrl() const { return conf_.redirect_url; }
+    // 問い合わせ/解決API（外部にConfig構造を露出しない）
+    unsigned long clientMaxBodySize() const;
+    const FilePath& rootDir() const;
+    bool isBackwardSearch() const;
+    bool isCgiEnabled() const;
+    bool isAutoIndexEnabled() const;
+    bool hasRedirect() const;
+    const std::string& redirectTarget() const;
+
+    bool tryGetErrorPagePath(
+        const http::HttpStatus& status, std::string* out_path) const;
+
+    std::vector<std::string> buildIndexCandidatePaths(
+        const std::string& request_path) const;
 
     // ビジネスロジック
-    bool isAllowed(const http::HttpMethod& method) const
-    {
-        return conf_.allowed_methods.find(method) !=
-               conf_.allowed_methods.end();
-    }
-
+    bool isMethodAllowed(const http::HttpMethod& method) const;
+    size_t pathPatternLength() const;
     bool isMatchPattern(const std::string& path) const;
-    // {
-    // 	if (conf_.is_backward_search)
-    // 	{
-    // 		return utils::BackwardMatch(path, conf_.path_pattern);
-    // 	}
-    // 	else
-    // 	{
-    // 		return utils::ForwardMatch(path, conf_.path_pattern);
-    // 	}
-    // }
 
     // location : /cgi-bin
     // root dir : /public/cgi-bin
     // req      : /cgi-bin/test-cgi;
     // -> /public/cgi-bin/test-cgi
     std::string getAbsolutePath(const std::string& path) const;
-    // {
-    // 	if (conf_.is_backward_search)
-    // 	{
-    // 		return utils::JoinPath(conf_.root_dir, path);
-    // 	}
-    // 	return utils::JoinPath(
-    // 		conf_.root_dir,
-    // 		path.substr(conf_.path_pattern.length()));
-    // }
 
     // path     : /cgi-bin/test-cgi/hoge/fuga
     // location : /cgi-bin
     // -> /test-cgi/hoge/fuga
-    std::string removePathPatternFromPath(const std::string& path) const
-    {
-        if (conf_.is_backward_search)
-        {
-            return path;
-        }
-        return path.substr(conf_.path_pattern.length());
-    }
+    std::string removePathPatternFromPath(const std::string& path) const;
+
+    // 互換用（呼び出し側移行までの暫定）
+    bool isAllowed(const http::HttpMethod& method) const;
 
    private:
-    // コピー禁止（不要なので）
-    LocationDirective(const LocationDirective&);
-    LocationDirective& operator=(const LocationDirective&);
 };
 
 }  // namespace server

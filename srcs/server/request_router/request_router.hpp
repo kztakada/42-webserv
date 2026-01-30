@@ -1,6 +1,7 @@
 #ifndef WEBSERV_SERVER_REQUEST_ROUTER_HPP_
 #define WEBSERV_SERVER_REQUEST_ROUTER_HPP_
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -9,7 +10,10 @@
 #include "network/port_type.hpp"
 #include "server/config/server_config.hpp"
 #include "server/request_router/location_directive.hpp"
+#include "server/request_router/location_routing.hpp"
+#include "server/request_router/resolved_path.hpp"
 #include "server/request_router/virtual_server.hpp"
+#include "utils/result.hpp"
 
 /* RequestRouterの責務
 1. Virtual Server選択: Host header と server_name のマッチング
@@ -27,28 +31,24 @@ class RequestRouter
     ~RequestRouter();
 
     // リクエストに対応するLocationConfを取得
-    // @return 見つからない場合は NULL
-    const LocationDirective* route(const http::HttpRequest& request,
-        const IPAddress& server_ip, const PortType& server_port) const;
+    // @return 内部エラーは Result(ERROR, msg)
+    //         該当ロケーションがない場合は OK で location == NULL
+    utils::result::Result<LocationRouting> route(
+        const http::HttpRequest& request, const IPAddress& server_ip,
+        const PortType& server_port) const;
 
    private:
-    std::vector<VirtualServer> servers;
+    std::vector<VirtualServer> servers_;
+
     // Virtual Server選択
     // listen_port と server_name を元に適切なバーチャルサーバを返す｡
     // 該当するバーチャルサーバがない場合はNULLを返す｡
     const VirtualServer* selectVirtualServer(const IPAddress& listen_ip,
         const PortType& listen_port, const std::string& server_name) const;
 
-    // すべてのバーチャルサーバを保持するvectorへの参照を返す｡
-    const std::vector<VirtualServer>& getVirtualServers() const;
-
     // Location選択
-    const LocationDirective* selectLocation(
-        const http::HttpRequest& request, const VirtualServer* vserver) const;
-
-    // server_nameマッチング
-    bool matchServerName(const std::string& host_header,
-        const std::vector<std::string>& server_names) const;
+    const LocationDirective* selectLocationByPath(
+        const std::string& path, const VirtualServer* vserver) const;
 };
 
 }  // namespace server

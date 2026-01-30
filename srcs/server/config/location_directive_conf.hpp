@@ -18,28 +18,28 @@ using utils::result::Result;
 // serverディレクティブ内のlocationディレクティブの情報
 struct LocationDirectiveConf
 {
-    typedef std::map<http::HttpStatus, TargetURI> ErrorPagesMap;
     typedef std::map<CgiExt, FilePath> CgiExtensionsMap;
 
-    URIPath path_pattern;
-    bool is_backward_search;
-    std::set<http::HttpMethod> allowed_methods;
-    bool has_allowed_methods;
+    // clang-tidy(performance.Padding) 対応: パディングを減らすため並び順を調整
     unsigned long client_max_body_size;
-    bool has_client_max_body_size;
-    FilePath root_dir;
-    bool has_root_dir;
     std::vector<FileName> index_pages;
-    bool has_index_pages;
+    URIPath path_pattern;
+    FilePath root_dir;
+    TargetURI redirect_url;  // returnディレクティブで指定されたURL
+    FilePath upload_store;   // upload_storeディレクティブで指定された保存先
+    std::set<http::HttpMethod> allowed_methods;
     CgiExtensionsMap cgi_extensions;
     ErrorPagesMap error_pages;
+    http::HttpStatus
+        redirect_status;  // returnディレクティブで指定されたステータス
+    bool is_backward_search;
+    bool has_allowed_methods;
+    bool has_client_max_body_size;
+    bool has_root_dir;
+    bool has_index_pages;
     bool has_error_pages;
     bool auto_index;  // ディレクトリ内ファイル一覧ページを有効にするかどうか
     bool has_auto_index;
-    http::HttpStatus
-        redirect_status;     // returnディレクティブで指定されたステータス
-    TargetURI redirect_url;  // returnディレクティブで指定されたURL
-    FilePath upload_store;   // upload_storeディレクティブで指定された保存先
 
     // デフォルト値での初期化
     LocationDirectiveConf();

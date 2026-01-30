@@ -27,7 +27,7 @@ struct VirtualServerConf
     std::vector<FileName> index_pages;
     unsigned long client_max_body_size;
     bool has_client_max_body_size;
-    LocationDirectiveConf::ErrorPagesMap error_pages;
+    ErrorPagesMap error_pages;
 
     std::vector<LocationDirectiveConf> locations;
 

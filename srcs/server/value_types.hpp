@@ -19,6 +19,8 @@ typedef std::string CgiExt;
 // conf_spec.md 6章「物理パス系」: 正規化済み絶対パス
 typedef utils::path::PhysicalPath FilePath;
 
+typedef std::map<http::HttpStatus, TargetURI> ErrorPagesMap;
+
 }  // namespace server
 
 #endif

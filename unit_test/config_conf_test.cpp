@@ -188,7 +188,7 @@ TEST(VirtualServerConf, DefaultsAreInvalidBecauseListenAndRootMissing)
 TEST(VirtualServerConf, BecomesValidWithListenPortRootAndValidLocations)
 {
     server::VirtualServerConf conf;
-    EXPECT_TRUE(conf.setListenPort("8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8080").isOk());
     utils::result::Result<std::string> cwd =
         utils::path::getCurrentWorkingDirectory();
     ASSERT_TRUE(cwd.isOk());
@@ -205,7 +205,7 @@ TEST(VirtualServerConf, BecomesValidWithListenPortRootAndValidLocations)
 TEST(VirtualServerConf, InvalidIfAnyLocationInvalid)
 {
     server::VirtualServerConf conf;
-    EXPECT_TRUE(conf.setListenPort("8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8080").isOk());
     EXPECT_TRUE(conf.setRootDir("/var/www").isOk());
 
     server::LocationDirectiveConf loc;
@@ -216,19 +216,67 @@ TEST(VirtualServerConf, InvalidIfAnyLocationInvalid)
     EXPECT_FALSE(conf.isValid());
 }
 
-TEST(VirtualServerConf, DuplicateSingleValueDirectivesReturnError)
+TEST(VirtualServerConf, ListensAllowMultipleButRejectExactDuplicates)
 {
     server::VirtualServerConf conf;
 
-    EXPECT_TRUE(conf.setListenPort("8080").isOk());
-    EXPECT_TRUE(conf.setListenPort("8081").isError());
-    EXPECT_TRUE(conf.setListenIp("127.0.0.1").isError());
+    EXPECT_TRUE(conf.appendListen("", "8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8081").isOk());
+    EXPECT_TRUE(conf.appendListen("127.0.0.1", "8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8080").isError());
 
     EXPECT_TRUE(conf.setRootDir("/var/www").isOk());
     EXPECT_TRUE(conf.setRootDir("/var/www2").isError());
 
     EXPECT_TRUE(conf.setClientMaxBodySize(123).isOk());
     EXPECT_TRUE(conf.setClientMaxBodySize(456).isError());
+}
+
+TEST(VirtualServerConf, GetListensResolvesWildcardAndDuplicates)
+{
+    server::VirtualServerConf conf;
+
+    // 同一 port で wildcard が存在する場合、他IPは除外される
+    EXPECT_TRUE(conf.appendListen("127.0.0.1", "8080").isOk());
+    EXPECT_TRUE(conf.appendListen("192.168.0.10", "8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8080").isOk());  // ipv4Any (0.0.0.0)
+    EXPECT_TRUE(
+        conf.appendListen("0.0.0.0", "8080").isError());  // exact duplicate
+
+    // wildcard が無い port は完全同一 (IP:port) のみ 1つに畳み込む
+    EXPECT_TRUE(conf.appendListen("127.0.0.1", "8081").isOk());
+    EXPECT_TRUE(conf.appendListen("127.0.0.1", "8081").isError());
+    EXPECT_TRUE(conf.appendListen("192.168.0.10", "8081").isOk());
+
+    std::vector<server::Listen> listens = conf.getListens();
+
+    bool has_wild_8080 = false;
+    bool has_127_8080 = false;
+    bool has_192_8080 = false;
+    bool has_127_8081 = false;
+    bool has_192_8081 = false;
+
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        const std::string ip = listens[i].host_ip.toString();
+        const std::string port = listens[i].port.toString();
+        if (port == "8080" && ip == "0.0.0.0")
+            has_wild_8080 = true;
+        if (port == "8080" && ip == "127.0.0.1")
+            has_127_8080 = true;
+        if (port == "8080" && ip == "192.168.0.10")
+            has_192_8080 = true;
+        if (port == "8081" && ip == "127.0.0.1")
+            has_127_8081 = true;
+        if (port == "8081" && ip == "192.168.0.10")
+            has_192_8081 = true;
+    }
+
+    EXPECT_TRUE(has_wild_8080);
+    EXPECT_FALSE(has_127_8080);
+    EXPECT_FALSE(has_192_8080);
+    EXPECT_TRUE(has_127_8081);
+    EXPECT_TRUE(has_192_8081);
 }
 
 TEST(VirtualServerConf, ErrorPageMustBeAbsoluteUriPathOrHttpUrl)
@@ -249,7 +297,7 @@ TEST(VirtualServerConf, RejectsNulInPathTokens)
     server::VirtualServerConf conf;
     std::string with_nul = std::string("a\0b", 3);
 
-    EXPECT_TRUE(conf.setListenPort("8080").isOk());
+    EXPECT_TRUE(conf.appendListen("", "8080").isOk());
     EXPECT_TRUE(conf.setRootDir(with_nul).isError());
     EXPECT_TRUE(conf.appendIndexPage(with_nul).isError());
     EXPECT_TRUE(
@@ -265,7 +313,7 @@ TEST(ServerConfig, IsValidRequiresAtLeastOneValidServer)
     EXPECT_TRUE(conf.appendServer(v).isError());
     EXPECT_FALSE(conf.isValid());
 
-    EXPECT_TRUE(v.setListenPort("8080").isOk());
+    EXPECT_TRUE(v.appendListen("", "8080").isOk());
     EXPECT_TRUE(v.setRootDir("/var/www").isOk());
     EXPECT_TRUE(v.appendLocation(server::LocationDirectiveConf()).isOk());
     EXPECT_TRUE(conf.appendServer(v).isOk());

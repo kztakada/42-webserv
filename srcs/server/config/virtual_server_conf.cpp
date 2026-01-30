@@ -1,5 +1,8 @@
 #include "server/config/virtual_server_conf.hpp"
 
+#include <map>
+#include <set>
+
 #include "utils/path.hpp"
 #include "utils/result.hpp"
 
@@ -36,8 +39,7 @@ static bool isValidUriOrUrlTarget_(const std::string& target)
 }
 
 VirtualServerConf::VirtualServerConf()
-    : listen_ip(IPAddress::ipv4Any()),
-      listen_port(),
+    : listens(),
       root_dir(),
       index_pages(),
       client_max_body_size(1024 * 1024),
@@ -48,37 +50,24 @@ VirtualServerConf::VirtualServerConf()
     index_pages.push_back("index.html");
 }
 
-Result<void> VirtualServerConf::setListenIp(const std::string& listen_ip_str)
+Result<void> VirtualServerConf::appendListen(
+    const std::string& listen_ip_str, const std::string& listen_port_str)
 {
-    if (!this->listen_port.empty())
-    {
-        return Result<void>(ERROR, "directive is duplicate: listen");
-    }
-    if (listen_ip_str.empty())
-    {
-        this->listen_ip = IPAddress::ipv4Any();
-        return Result<void>();
-    }
-
-    Result<IPAddress> parsed = IPAddress::parseIpv4Numeric(listen_ip_str);
-    if (parsed.isError())
-    {
-        return Result<void>(ERROR, "listen ip is invalid");
-    }
-    this->listen_ip = parsed.unwrap();
-    return Result<void>();
-}
-
-Result<void> VirtualServerConf::setListenPort(
-    const std::string& listen_port_str)
-{
-    if (!this->listen_port.empty())
-    {
-        return Result<void>(ERROR, "directive is duplicate: listen");
-    }
     if (listen_port_str.empty())
     {
         return Result<void>(ERROR, "listen port is empty");
+    }
+
+    IPAddress ip = IPAddress::ipv4Any();
+    if (!listen_ip_str.empty())
+    {
+        Result<IPAddress> parsed_ip =
+            IPAddress::parseIpv4Numeric(listen_ip_str);
+        if (parsed_ip.isError())
+        {
+            return Result<void>(ERROR, "listen ip is invalid");
+        }
+        ip = parsed_ip.unwrap();
     }
 
     Result<PortType> parsed = PortType::parseNumeric(listen_port_str);
@@ -86,8 +75,96 @@ Result<void> VirtualServerConf::setListenPort(
     {
         return Result<void>(ERROR, "listen port is invalid");
     }
-    this->listen_port = parsed.unwrap();
+
+    return appendListen(Listen(ip, parsed.unwrap()));
+}
+
+Result<void> VirtualServerConf::appendListen(const Listen& listen)
+{
+    if (listen.host_ip.empty())
+    {
+        return Result<void>(ERROR, "listen ip is empty");
+    }
+    if (listen.port.empty())
+    {
+        return Result<void>(ERROR, "listen port is empty");
+    }
+
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        if (listens[i].host_ip.toString() == listen.host_ip.toString() &&
+            listens[i].port.toString() == listen.port.toString())
+        {
+            return Result<void>(ERROR, "directive is duplicate: listen");
+        }
+    }
+    listens.push_back(listen);
     return Result<void>();
+}
+
+std::vector<Listen> VirtualServerConf::getListens() const
+{
+    // 1) port ごとに wildcard の有無を先に確定する（順序に依存しない）
+    std::map<std::string, bool> wildcard_ports;
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        const std::string port = listens[i].port.toString();
+        if (port.empty())
+        {
+            continue;
+        }
+        if (listens[i].host_ip.isWildcard())
+        {
+            wildcard_ports[port] = true;
+        }
+    }
+
+    // 2) 重複解決しながら出力
+    std::vector<Listen> out;
+    out.reserve(listens.size());
+
+    std::set<std::string> included_pairs;
+    std::set<std::string> included_wildcard_ports;
+
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        const Listen& l = listens[i];
+        const std::string port = l.port.toString();
+        const std::string ip = l.host_ip.toString();
+        if (port.empty() || ip.empty())
+        {
+            continue;
+        }
+
+        const bool has_wildcard =
+            wildcard_ports.find(port) != wildcard_ports.end();
+
+        if (has_wildcard)
+        {
+            if (!l.host_ip.isWildcard())
+            {
+                continue;
+            }
+            if (included_wildcard_ports.find(port) !=
+                included_wildcard_ports.end())
+            {
+                continue;
+            }
+            included_wildcard_ports.insert(port);
+            out.push_back(l);
+            continue;
+        }
+
+        const std::string key = ip + ":" + port;
+        if (included_pairs.find(key) != included_pairs.end())
+        {
+            continue;
+        }
+        included_pairs.insert(key);
+        out.push_back(l);
+    }
+
+    return out;
 }
 
 Result<void> VirtualServerConf::appendServerName(
@@ -187,9 +264,16 @@ Result<void> VirtualServerConf::appendLocation(
 
 bool VirtualServerConf::isValid() const
 {
-    if (listen_port.empty() || root_dir.empty())
+    if (listens.empty() || root_dir.empty())
     {
         return false;
+    }
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        if (listens[i].host_ip.empty() || listens[i].port.empty())
+        {
+            return false;
+        }
     }
     if (client_max_body_size > INT_MAX)
     {

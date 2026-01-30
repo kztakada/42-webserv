@@ -20,13 +20,19 @@ class IPAddress
     static utils::result::Result<IPAddress> parseIpv4Numeric(
         const std::string& ip_str);
 
+    bool isWildcard() const;
+
     const std::string& toString() const;
     const bool empty() const;
 
    private:
-    explicit IPAddress(const std::string& ip_str) : ip_str_(ip_str) {}
+    explicit IPAddress(const std::string& ip_str)
+        : ip_str_(ip_str), is_wildcard_(ip_str == "0.0.0.0")
+    {
+    }
 
     std::string ip_str_;
+    bool is_wildcard_;
 };
 
 #endif

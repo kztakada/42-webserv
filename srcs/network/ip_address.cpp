@@ -15,7 +15,7 @@ utils::result::Result<IPAddress> makeInvalidIpResult()
 
 }  // namespace
 
-IPAddress::IPAddress() : ip_str_("") {}
+IPAddress::IPAddress() : ip_str_(""), is_wildcard_(false) {}
 
 IPAddress::IPAddress(const sockaddr_in& addr)
 {
@@ -30,6 +30,7 @@ IPAddress::IPAddress(const sockaddr_in& addr)
     std::ostringstream oss;
     oss << b1 << '.' << b2 << '.' << b3 << '.' << b4;
     ip_str_ = oss.str();
+    is_wildcard_ = (ip_str_ == "0.0.0.0");
 }
 
 IPAddress IPAddress::ipv4Any() { return IPAddress("0.0.0.0"); }
@@ -108,3 +109,5 @@ utils::result::Result<IPAddress> IPAddress::parseIpv4Numeric(
 const std::string& IPAddress::toString() const { return ip_str_; }
 
 const bool IPAddress::empty() const { return ip_str_.empty(); }
+
+bool IPAddress::isWildcard() const { return is_wildcard_; }

@@ -36,9 +36,21 @@ class LocationDirective
     bool isAutoIndexEnabled() const;
     bool hasRedirect() const;
     const std::string& redirectTarget() const;
+    http::HttpStatus redirectStatus() const;
+
+    bool hasUploadStore() const;
+    const FilePath& uploadStore() const;
 
     bool tryGetErrorPagePath(
         const http::HttpStatus& status, std::string* out_path) const;
+
+    // cgi_extensions のマッチング（FSを見ずに request path から判断する）。
+    // - out_script_end: script_name の終端位置（uri_path.substr(0, end) が
+    // script_name）
+    // - 見つからない場合は out_script_end に npos をセットする。
+    void chooseCgiExecutorByRequestPath(const std::string& uri_path,
+        FilePath* out_executor, std::string* out_ext,
+        size_t* out_script_end) const;
 
     std::vector<std::string> buildIndexCandidatePaths(
         const std::string& request_path) const;

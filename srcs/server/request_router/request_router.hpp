@@ -11,7 +11,7 @@
 #include "server/config/server_config.hpp"
 #include "server/request_router/location_directive.hpp"
 #include "server/request_router/location_routing.hpp"
-#include "server/request_router/resolved_path.hpp"
+#include "server/request_router/resolved_request_context.hpp"
 #include "server/request_router/virtual_server.hpp"
 #include "utils/result.hpp"
 

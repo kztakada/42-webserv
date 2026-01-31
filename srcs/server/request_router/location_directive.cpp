@@ -37,6 +37,21 @@ const std::string& LocationDirective::redirectTarget() const
     return conf_.redirect_url;
 }
 
+http::HttpStatus LocationDirective::redirectStatus() const
+{
+    return conf_.redirect_status;
+}
+
+bool LocationDirective::hasUploadStore() const
+{
+    return !conf_.upload_store.empty();
+}
+
+const FilePath& LocationDirective::uploadStore() const
+{
+    return conf_.upload_store;
+}
+
 bool LocationDirective::tryGetErrorPagePath(
     const http::HttpStatus& status, std::string* out_path) const
 {
@@ -50,6 +65,74 @@ bool LocationDirective::tryGetErrorPagePath(
         *out_path = it->second;
     }
     return true;
+}
+
+void LocationDirective::chooseCgiExecutorByRequestPath(
+    const std::string& uri_path, FilePath* out_executor, std::string* out_ext,
+    size_t* out_script_end) const
+{
+    if (out_script_end)
+    {
+        *out_script_end = std::string::npos;
+    }
+    if (out_executor)
+    {
+        *out_executor = FilePath();
+    }
+    if (out_ext)
+    {
+        out_ext->clear();
+    }
+    if (uri_path.empty())
+    {
+        return;
+    }
+
+    size_t best_end = std::string::npos;
+    FilePath best_exec;
+    std::string best_ext;
+
+    for (LocationDirectiveConf::CgiExtensionsMap::const_iterator it =
+             conf_.cgi_extensions.begin();
+        it != conf_.cgi_extensions.end(); ++it)
+    {
+        const std::string& ext = it->first;
+        const FilePath& exec = it->second;
+
+        size_t pos = uri_path.find(ext);
+        while (pos != std::string::npos)
+        {
+            const size_t end = pos + ext.size();
+            if (end == uri_path.size() || uri_path[end] == '/')
+            {
+                if (best_end == std::string::npos || end < best_end)
+                {
+                    best_end = end;
+                    best_exec = exec;
+                    best_ext = ext;
+                }
+                break;
+            }
+            pos = uri_path.find(ext, pos + 1);
+        }
+    }
+
+    if (out_script_end)
+    {
+        *out_script_end = best_end;
+    }
+    if (best_end == std::string::npos)
+    {
+        return;
+    }
+    if (out_executor)
+    {
+        *out_executor = best_exec;
+    }
+    if (out_ext)
+    {
+        *out_ext = best_ext;
+    }
 }
 
 std::vector<std::string> LocationDirective::buildIndexCandidatePaths(

@@ -2,8 +2,8 @@
 
 namespace server
 {
-using utils::result::Result;
 using http::HttpStatus;
+using utils::result::Result;
 
 RequestRouter::RequestRouter(const ServerConfig& config) : servers_()
 {
@@ -16,9 +16,8 @@ RequestRouter::RequestRouter(const ServerConfig& config) : servers_()
 
 RequestRouter::~RequestRouter() {}
 
-Result<LocationRouting> RequestRouter::route(
-    const http::HttpRequest& request, const IPAddress& server_ip,
-    const PortType& server_port) const
+Result<LocationRouting> RequestRouter::route(const http::HttpRequest& request,
+    const IPAddress& server_ip, const PortType& server_port) const
 {
     if (servers_.empty())
     {
@@ -26,35 +25,34 @@ Result<LocationRouting> RequestRouter::route(
             utils::result::ERROR, "no virtual servers configured");
     }
 
-    Result<ResolvedPath> resolved =
-        ResolvedPath::create(request);
-    if (resolved.isError())
+    Result<ResolvedRequestContext> ctx =
+        ResolvedRequestContext::create(request);
+    if (ctx.isError())
     {
-        return LocationRouting(NULL, NULL, std::string(), std::string(),
-            request.getMinorVersion(), HttpStatus::BAD_REQUEST);
-    }
-
-    Result<std::string> normalized_path =
-        resolved.unwrap().resolveDotSegmentsOrError();
-    if (normalized_path.isError())
-    {
-        return LocationRouting(NULL, NULL, std::string(),
-            resolved.unwrap().getHost(), resolved.unwrap().getMinorVersion(),
+        return LocationRouting(NULL, NULL,
+            ResolvedRequestContext::createForBadRequest(request), request,
             HttpStatus::BAD_REQUEST);
     }
+    ResolvedRequestContext resolved = ctx.unwrap();
 
-    const VirtualServer* vserver = selectVirtualServer(
-        server_ip, server_port, resolved.unwrap().getHost());
+    Result<void> normalized = resolved.resolveDotSegmentsOrError();
+    if (normalized.isError())
+    {
+        return LocationRouting(
+            NULL, NULL, resolved, request, HttpStatus::BAD_REQUEST);
+    }
+
+    const VirtualServer* vserver =
+        selectVirtualServer(server_ip, server_port, resolved.getHost());
     if (!vserver)
     {
         return Result<LocationRouting>(utils::result::ERROR,
             "no virtual server for given listen endpoint");
     }
     const LocationDirective* location =
-        selectLocationByPath(normalized_path.unwrap(), vserver);
-    return LocationRouting(vserver, location, normalized_path.unwrap(),
-        resolved.unwrap().getHost(), resolved.unwrap().getMinorVersion(),
-        HttpStatus::OK);
+        selectLocationByPath(resolved.getRequestPath(), vserver);
+    return LocationRouting(
+        vserver, location, resolved, request, HttpStatus::OK);
 }
 
 const VirtualServer* RequestRouter::selectVirtualServer(

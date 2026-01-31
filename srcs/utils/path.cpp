@@ -365,15 +365,22 @@ Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
         return leaf;
     }
 
-    // "uri_path == /" のケース
+    // ここに到達するのは、uri_path == "/" もしくは
+    // 末尾までがディレクトリとして辿れたケース。
+    Result<std::string> cur_physical = getCurrentWorkingDirectory();
     (void)::chdir(original_cwd.unwrap().c_str());
-    Result<PhysicalPath> root_as_path =
-        PhysicalPath::resolve(root_physical.unwrap());
-    if (root_as_path.isError())
+    if (cur_physical.isError() ||
+        !isUnderRootPhysical_(root_physical.unwrap(), cur_physical.unwrap()))
     {
-        return Result<PhysicalPath>(ERROR, root_as_path.getErrorMessage());
+        return Result<PhysicalPath>(ERROR, "path escapes root_dir (physical)");
     }
-    return root_as_path;
+    Result<PhysicalPath> cur_as_path =
+        PhysicalPath::resolve(cur_physical.unwrap());
+    if (cur_as_path.isError())
+    {
+        return Result<PhysicalPath>(ERROR, cur_as_path.getErrorMessage());
+    }
+    return cur_as_path;
 }
 
 Result<PhysicalPath> resolvePhysicalPathUnderRoot(

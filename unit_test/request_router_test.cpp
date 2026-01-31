@@ -78,11 +78,11 @@ TEST(RequestRouter, SelectsVirtualServerByHostAndNormalizesPath)
     ASSERT_TRUE(routed.isOk());
 
     EXPECT_EQ(routed.unwrap().getHttpStatus(), http::HttpStatus::OK);
-    EXPECT_EQ(routed.unwrap().getRequestPath(), std::string("/b/y"));
+    EXPECT_EQ(routed.unwrap().getNextAction(), server::SERVE_STATIC);
 
-    utils::result::Result<std::string> abs = routed.unwrap().getPath();
-    ASSERT_TRUE(abs.isOk());
-    EXPECT_EQ(abs.unwrap(), std::string("/var/www_b/y"));
+    utils::result::Result<std::string> uri = routed.unwrap().getStaticUriPath();
+    ASSERT_TRUE(uri.isOk());
+    EXPECT_EQ(uri.unwrap(), std::string("/b/y"));
 }
 
 TEST(RequestRouter, DefaultsToFirstMatchingServerWhenHostNotMatched)
@@ -103,9 +103,12 @@ TEST(RequestRouter, DefaultsToFirstMatchingServerWhenHostNotMatched)
         router.route(req, ip.unwrap(), port.unwrap());
     ASSERT_TRUE(routed.isOk());
 
-    utils::result::Result<std::string> abs = routed.unwrap().getPath();
-    ASSERT_TRUE(abs.isOk());
-    EXPECT_EQ(abs.unwrap(), std::string("/var/www_a/test"));
+    EXPECT_EQ(routed.unwrap().getHttpStatus(), http::HttpStatus::OK);
+    EXPECT_EQ(routed.unwrap().getNextAction(), server::SERVE_STATIC);
+
+    utils::result::Result<std::string> uri = routed.unwrap().getStaticUriPath();
+    ASSERT_TRUE(uri.isOk());
+    EXPECT_EQ(uri.unwrap(), std::string("/a/test"));
 }
 
 TEST(RequestRouter, ReturnsBadRequestWhenPathEscapesRoot)
@@ -127,6 +130,5 @@ TEST(RequestRouter, ReturnsBadRequestWhenPathEscapesRoot)
     ASSERT_TRUE(routed.isOk());
 
     EXPECT_EQ(routed.unwrap().getHttpStatus(), http::HttpStatus::BAD_REQUEST);
-    EXPECT_FALSE(routed.unwrap().hasVirtualServer());
-    EXPECT_FALSE(routed.unwrap().hasLocationDirective());
+    EXPECT_EQ(routed.unwrap().getNextAction(), server::RESPOND_ERROR);
 }

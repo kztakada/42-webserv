@@ -119,7 +119,7 @@ class ConfigParser
     // https://www.nic.ad.jp/ja/dom/system.html
     //
     // DOMAIN_NAME: DOMAIN_LABEL ('.' DOMAIN_LABEL)* [:PORT];
-    static bool isDomainName(std::string domain_name);
+    static bool isDomainName(std::string domain_name, bool is_allow_port);
 
     // ドメインのラベル(ドメイン内の'.'で区切られた文字列のこと)
     // DOMAIN_LABEL: (ALPHABET | NUMBER)+

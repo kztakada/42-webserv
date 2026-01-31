@@ -603,7 +603,7 @@ Result<void> ConfigParser::parseServerNameDirective(
             break;
         }
         has_any = true;
-        if (!isDomainName(w.unwrap()))
+        if (!isDomainName(w.unwrap(), false))
         {
             return Result<void>(ERROR, "server_name is invalid: " + w.unwrap());
         }
@@ -998,7 +998,7 @@ bool ConfigParser::isDomainLabel(const std::string& label)
     return true;
 }
 
-bool ConfigParser::isDomainName(std::string domain_name)
+bool ConfigParser::isDomainName(std::string domain_name, bool is_allow_port)
 {
     if (domain_name.empty() || domain_name.size() > kMaxDomainLength)
     {
@@ -1011,6 +1011,10 @@ bool ConfigParser::isDomainName(std::string domain_name)
     const size_t colon = domain_name.rfind(':');
     if (colon != std::string::npos)
     {
+        if (!is_allow_port)
+        {
+            return false;
+        }
         host = domain_name.substr(0, colon);
         port = domain_name.substr(colon + 1);
         if (host.empty())

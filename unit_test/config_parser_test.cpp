@@ -73,6 +73,17 @@ TEST(ConfigParser, SameServerNameOnDifferentPortIsOk)
     ASSERT_EQ(2u, r.unwrap().servers.size());
 }
 
+TEST(ConfigParser, ServerNameWithPortIsError)
+{
+    const std::string conf =
+        "server { listen 8080; server_name example.com:8080; root /var/www; "
+        "}\n";
+
+    utils::result::Result<server::ServerConfig> r =
+        server::ConfigParser::parseData(conf);
+    EXPECT_TRUE(r.isError());
+}
+
 TEST(ConfigParser, ParsesClientMaxBodySizeWithSuffix)
 {
     const std::string conf =

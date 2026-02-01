@@ -15,13 +15,7 @@ TcpConnectionSocketFd::TcpConnectionSocketFd(
 {
 }
 
-TcpConnectionSocketFd::~TcpConnectionSocketFd()
-{
-    if (fd_ >= 0)
-    {
-        ::close(fd_);
-    }
-}
+TcpConnectionSocketFd::~TcpConnectionSocketFd() {}
 
 IPAddress TcpConnectionSocketFd::getServerIp() const
 {

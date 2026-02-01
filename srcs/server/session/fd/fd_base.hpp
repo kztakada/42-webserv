@@ -15,8 +15,11 @@ class FdBase
     explicit FdBase(int fd) : fd_(fd) {}
     virtual ~FdBase()
     {
-        if (fd_ > 0)
+        if (fd_ >= 0)
+        {
             ::close(fd_);
+            fd_ = -1;
+        }
     }
 
    private:

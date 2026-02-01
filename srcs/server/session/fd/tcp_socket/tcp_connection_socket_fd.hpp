@@ -1,6 +1,8 @@
 #ifndef WEBSERV_TCP_CONNECTION_SOCKET_FD_HPP_
 #define WEBSERV_TCP_CONNECTION_SOCKET_FD_HPP_
 
+#include <string>
+
 #include "server/session/fd/fd_base.hpp"
 #include "server/session/fd/tcp_socket/socket_address.hpp"
 

@@ -14,6 +14,14 @@ namespace server
 {
 using namespace utils::result;
 
+struct CgiSpawnResult
+{
+    pid_t pid;
+    int stdin_fd;   // parent writes -> child stdin
+    int stdout_fd;  // parent reads  <- child stdout
+    int stderr_fd;  // parent reads  <- child stderr
+};
+
 // CGIプロセスとのパイプ通信を管理（fork + pipe 実装）
 class CgiPipeFd : public FdBase
 {
@@ -21,14 +29,12 @@ class CgiPipeFd : public FdBase
     CgiPipeFd(int fd);
     virtual ~CgiPipeFd();
 
-    void KillProcess();
-    bool IsProcessAlive() const;
-    int WaitProcess();
+    bool isSame(int fd) const { return fd_ == fd; }
 
     virtual std::string GetResourceType() const;
 
     // 静的ファクトリメソッド
-    static Result<void> Execute(const std::string& script_path,
+    static Result<CgiSpawnResult> Execute(const std::string& script_path,
         const std::vector<std::string>& args,
         const std::map<std::string, std::string>& env_vars,
         const std::string& working_dir);
@@ -38,9 +44,8 @@ class CgiPipeFd : public FdBase
     CgiPipeFd(const CgiPipeFd& rhs);
     CgiPipeFd& operator=(const CgiPipeFd& rhs);
 
-    static void SetupChildEnvironment(
+    static std::vector<std::string> buildEnvEntries(
         const std::map<std::string, std::string>& env_vars);
-    static void CloseUnusedFds(int max_fd);
 };
 
 }  // namespace server

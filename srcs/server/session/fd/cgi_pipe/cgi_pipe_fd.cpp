@@ -4,19 +4,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <cstdlib>
-#include <cstring>
+#include <cerrno>
+#include <string>
 
 namespace server
 {
 
 CgiPipeFd::CgiPipeFd(int fd) : FdBase(fd) {}
 
-CgiPipeFd::~CgiPipeFd()
-{
-    if (fd_ >= 0)
-        close(fd_);
-}
+CgiPipeFd::~CgiPipeFd() {}
 
 // void CgiPipeFd::KillProcess() {
 //   if (cgi_pid_ > 0) {
@@ -44,52 +40,86 @@ CgiPipeFd::~CgiPipeFd()
 
 std::string CgiPipeFd::GetResourceType() const { return "CgiPipeFd"; }
 
-Result<void> CgiPipeFd::Execute(const std::string& script_path,
+namespace
+{
+
+void closeIfValid_(int& fd)
+{
+    if (fd >= 0)
+    {
+        ::close(fd);
+        fd = -1;
+    }
+}
+
+void closePipeIfValid_(int pipefd[2])
+{
+    closeIfValid_(pipefd[0]);
+    closeIfValid_(pipefd[1]);
+}
+
+}  // namespace
+
+std::vector<std::string> CgiPipeFd::buildEnvEntries(
+    const std::map<std::string, std::string>& env_vars)
+{
+    std::vector<std::string> entries;
+    for (std::map<std::string, std::string>::const_iterator it =
+             env_vars.begin();
+        it != env_vars.end(); ++it)
+    {
+        entries.push_back(it->first + "=" + it->second);
+    }
+    return entries;
+}
+
+Result<CgiSpawnResult> CgiPipeFd::Execute(const std::string& script_path,
     const std::vector<std::string>& args,
     const std::map<std::string, std::string>& env_vars,
     const std::string& working_dir)
 {
-    int stdin_pipe[2];
-    int stdout_pipe[2];
-    int stderr_pipe[2];
+    int stdin_pipe[2] = {-1, -1};
+    int stdout_pipe[2] = {-1, -1};
+    int stderr_pipe[2] = {-1, -1};
 
     if (pipe(stdin_pipe) < 0 || pipe(stdout_pipe) < 0 || pipe(stderr_pipe) < 0)
     {
-        return Result<void>(ERROR, "pipe() failed");
+        closePipeIfValid_(stdin_pipe);
+        closePipeIfValid_(stdout_pipe);
+        closePipeIfValid_(stderr_pipe);
+        return Result<CgiSpawnResult>(ERROR, "pipe() failed");
     }
 
     pid_t pid = fork();
     if (pid < 0)
     {
-        close(stdin_pipe[0]);
-        close(stdin_pipe[1]);
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
-        return Result<void>(ERROR, "fork() failed");
+        closePipeIfValid_(stdin_pipe);
+        closePipeIfValid_(stdout_pipe);
+        closePipeIfValid_(stderr_pipe);
+        return Result<CgiSpawnResult>(ERROR, "fork() failed");
     }
 
     if (pid == 0)
     {
         // 子プロセス
-        dup2(stdin_pipe[0], STDIN_FILENO);
-        dup2(stdout_pipe[1], STDOUT_FILENO);
-        dup2(stderr_pipe[1], STDERR_FILENO);
+        if (::dup2(stdin_pipe[0], STDIN_FILENO) < 0 ||
+            ::dup2(stdout_pipe[1], STDOUT_FILENO) < 0 ||
+            ::dup2(stderr_pipe[1], STDERR_FILENO) < 0)
+        {
+            ::_exit(1);
+        }
 
-        close(stdin_pipe[0]);
-        close(stdin_pipe[1]);
-        close(stdout_pipe[0]);
-        close(stdout_pipe[1]);
-        close(stderr_pipe[0]);
-        close(stderr_pipe[1]);
+        closePipeIfValid_(stdin_pipe);
+        closePipeIfValid_(stdout_pipe);
+        closePipeIfValid_(stderr_pipe);
 
         if (!working_dir.empty())
         {
-            chdir(working_dir.c_str());
+            if (::chdir(working_dir.c_str()) < 0)
+            {
+                ::_exit(1);
+            }
         }
-
-        SetupChildEnvironment(env_vars);
 
         // 引数の準備
         std::vector<char*> argv_ptrs;
@@ -100,40 +130,29 @@ Result<void> CgiPipeFd::Execute(const std::string& script_path,
         }
         argv_ptrs.push_back(NULL);
 
-        execv(script_path.c_str(), &argv_ptrs[0]);
-        exit(1);
+        std::vector<std::string> env_entries = buildEnvEntries(env_vars);
+        std::vector<char*> envp_ptrs;
+        for (size_t i = 0; i < env_entries.size(); ++i)
+        {
+            envp_ptrs.push_back(const_cast<char*>(env_entries[i].c_str()));
+        }
+        envp_ptrs.push_back(NULL);
+
+        ::execve(script_path.c_str(), &argv_ptrs[0], &envp_ptrs[0]);
+        ::_exit(127);
     }
 
     // 親プロセス
-    close(stdin_pipe[0]);
-    close(stdout_pipe[1]);
-    close(stderr_pipe[1]);
+    closeIfValid_(stdin_pipe[0]);
+    closeIfValid_(stdout_pipe[1]);
+    closeIfValid_(stderr_pipe[1]);
 
-    CgiPipeFd* pipe_stdin =
-        new CgiPipeFd(stdin_pipe[1]);  // 書き込み後にdeleteすればcloseされる
-    CgiPipeFd* pipe_stdout = new CgiPipeFd(stdout_pipe[0]);
-    CgiPipeFd* pipe_stderr = new CgiPipeFd(stderr_pipe[0]);
-
-    return Result<void>(OK);
-}
-
-void CgiPipeFd::SetupChildEnvironment(
-    const std::map<std::string, std::string>& env_vars)
-{
-    for (std::map<std::string, std::string>::const_iterator it =
-             env_vars.begin();
-        it != env_vars.end(); ++it)
-    {
-        setenv(it->first.c_str(), it->second.c_str(), 1);
-    }
-}
-
-void CgiPipeFd::CloseUnusedFds(int max_fd)
-{
-    for (int fd = 3; fd < max_fd; ++fd)
-    {
-        close(fd);
-    }
+    CgiSpawnResult spawned;
+    spawned.pid = pid;
+    spawned.stdin_fd = stdin_pipe[1];
+    spawned.stdout_fd = stdout_pipe[0];
+    spawned.stderr_fd = stderr_pipe[0];
+    return spawned;
 }
 
 }  // namespace server

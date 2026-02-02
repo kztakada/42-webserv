@@ -108,6 +108,6 @@ utils::result::Result<IPAddress> IPAddress::parseIpv4Numeric(
 
 const std::string& IPAddress::toString() const { return ip_str_; }
 
-const bool IPAddress::empty() const { return ip_str_.empty(); }
+bool IPAddress::empty() const { return ip_str_.empty(); }
 
 bool IPAddress::isWildcard() const { return is_wildcard_; }

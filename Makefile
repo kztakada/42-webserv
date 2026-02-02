@@ -42,13 +42,35 @@ PYTHON ?= python3
 
 GTEST_DIR   = ./google_test
 
-GTEST       := $(GTEST_DIR)/gtest $(GTEST_DIR)/googletest-release-1.11.0
+GTEST_STAMP := $(GTEST_DIR)/.gtest_ready
 GTEST_MAIN  := $(GTEST_DIR)/googletest-release-1.11.0/googletest/src/gtest_main.cc
 GTEST_ALL   := $(GTEST_DIR)/gtest/gtest-all.cc
 TEST_SRCS   := $(shell [ -d $(TEST_DIR) ] && find $(TEST_DIR) -type f -name '*.cpp')
 # ユニットテストで必要な本体コード(.cpp)だけを指定してリンクする
 # 例: make test TEST_PROD_SRCS='srcs/http/http_request.cpp'
-TEST_PROD_SRCS ?= srcs/http/http_request.cpp srcs/http/syntax.cpp
+TEST_PROD_SRCS ?= \
+	srcs/network/ip_address.cpp \
+	srcs/network/port_type.cpp \
+	srcs/utils/path.cpp \
+	srcs/http/http_request.cpp \
+	srcs/http/syntax.cpp \
+	srcs/server/session/fd/cgi_pipe/cgi_pipe_fd.cpp \
+	srcs/server/session/fd/tcp_socket/socket_address.cpp \
+	srcs/server/session/fd/tcp_socket/tcp_connection_socket_fd.cpp \
+	srcs/server/session/fd/tcp_socket/tcp_listen_socket_fd.cpp \
+	srcs/server/request_router/location_directive.cpp \
+	srcs/server/request_router/location_routing.cpp \
+	srcs/server/request_router/resolved_request_context.cpp \
+	srcs/server/request_router/virtual_server.cpp \
+	srcs/server/request_router/request_router.cpp \
+	srcs/server/config/location_directive_conf.cpp \
+	srcs/server/config/parser/config_parser.cpp \
+	srcs/server/config/virtual_server_conf.cpp \
+	srcs/server/config/server_config.cpp \
+	srcs/server/reactor/fd_watch.cpp \
+	srcs/server/reactor/fd_event_reactor/epoll_reactor.cpp \
+	srcs/server/reactor/fd_event_reactor/select_reactor.cpp \
+	srcs/server/reactor/fd_event_reactor_factory.cpp
 TEST_PROD_OBJS := $(TEST_PROD_SRCS:%.cpp=$(OBJS_DIR)/%.o)
 TEST_OBJS      := $(TEST_PROD_OBJS) $(TEST_SRCS:%.cpp=$(OBJS_DIR)/%.o)
 TEST_DEPENDENCIES \
@@ -58,7 +80,7 @@ TEST_DEPENDENCIES \
 
 
 test: CXXFLAGS := -I$(SRCS_DIR) -I$(TEST_DIR) --std=c++11 -I$(GTEST_DIR) -g3 -fsanitize=address
-test: $(GTEST) $(TEST_OBJS)
+test: $(GTEST_STAMP) $(TEST_OBJS)
 	# Google Test require C++11
 	$(CXX) $(CXXFLAGS) $(GTEST_MAIN) $(GTEST_ALL) \
 		-I$(GTEST_DIR) -lpthread \
@@ -66,7 +88,7 @@ test: $(GTEST) $(TEST_OBJS)
 		-o $(TESTER_NAME)
 	$(TESTER_NAME)
 
-$(GTEST):
+$(GTEST_STAMP):
 	mkdir -p $(GTEST_DIR)
 	rm -rf $(GTEST_DIR)/gtest $(GTEST_DIR)/googletest-release-1.11.0
 	rm -rf googletest-release-1.11.0
@@ -75,6 +97,7 @@ $(GTEST):
 	rm -rf release-1.11.0.tar.gz
 	$(PYTHON) googletest-release-1.11.0/googletest/scripts/fuse_gtest_files.py $(GTEST_DIR)
 	mv googletest-release-1.11.0 $(GTEST_DIR)
+	@touch $(GTEST_STAMP)
 
 clean_test:
 	$(RM) $(TEST_OBJS) $(TEST_DEPENDENCIES)
@@ -83,4 +106,4 @@ clean_test:
 	$(RM) -rf ./-h
 	$(RM) -rf $(GTEST_DIR)
 
-.PHONY: test $(GTEST)
+.PHONY: test

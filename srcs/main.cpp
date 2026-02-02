@@ -18,7 +18,7 @@ int main(int argc, char* argv[])
     try
     {
         // 1. 設定ファイルを読み込んでServerConfigオブジェクトを作成
-        Result<ServerConfig> config_result = ConfigParser::parse(argv[1]);
+        Result<ServerConfig> config_result = ConfigParser::parseFile(argv[1]);
         if (config_result.isError())
         {
             std::cerr << "Config error: " << config_result.getErrorMessage()

@@ -10,6 +10,7 @@
 namespace server
 {
 using namespace utils;
+using namespace utils::result;
 
 Server* Server::running_instance_ = nullptr;
 
@@ -46,7 +47,7 @@ void Server::start()
         // 1. 次のタイムアウト時間を計算
         int timeout_ms = timeout_manager_->getNextTimeoutMs();
         // 2. イベント待機
-        Result<std::vector<std::pair<FdEvent*, uint32_t>>> events_result =
+        Result<const std::vector<FdEvent>&> events_result =
             reactor_->waitEvents(timeout_ms);
         if (events_result.isError())
         {
@@ -54,14 +55,13 @@ void Server::start()
             continue;
         }
         // イベント取得成功
-        std::vector<std::pair<FdEvent*, uint32_t>> occurred_events =
-            events_result.unwrap();
+        const std::vector<FdEvent>& occurred_events = events_result.unwrap();
 
         // 3. イベント処理
         session_controller_->dispatchEvents(occurred_events);
 
         // 4. タイムアウト処理
-        session_controller_->checkTimeouts();
+        session_controller_->handleTimeouts();
     }
 
     session_controller_->clearAllSessions();

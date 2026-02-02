@@ -14,7 +14,7 @@ class Log
     template <typename T1>
     static void error(const T1& p1)
     {
-        std::ofstream ofs(error_file_path_, std::ios::app);
+        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
         if (ofs)
             log_core(ofs, "[ERROR] ", p1);
         else
@@ -23,7 +23,7 @@ class Log
     template <typename T1, typename T2>
     static void error(const T1& p1, const T2& p2)
     {
-        std::ofstream ofs(error_file_path_, std::ios::app);
+        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
         if (ofs)
             log_core(ofs, "[ERROR] ", p1, p2);
         else
@@ -32,7 +32,7 @@ class Log
     template <typename T1, typename T2, typename T3>
     static void error(const T1& p1, const T2& p2, const T3& p3)
     {
-        std::ofstream ofs(error_file_path_, std::ios::app);
+        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
         if (ofs)
             log_core(ofs, "[ERROR] ", p1, p2, p3);
         else
@@ -41,7 +41,7 @@ class Log
     template <typename T1, typename T2, typename T3, typename T4>
     static void error(const T1& p1, const T2& p2, const T3& p3, const T4& p4)
     {
-        std::ofstream ofs(error_file_path_, std::ios::app);
+        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
         if (ofs)
             log_core(ofs, "[ERROR] ", p1, p2, p3, p4);
         else
@@ -51,7 +51,7 @@ class Log
     static void error(
         const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
     {
-        std::ofstream ofs(error_file_path_, std::ios::app);
+        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
         if (ofs)
             log_core(ofs, "[ERROR] ", p1, p2, p3, p4, p5);
         else

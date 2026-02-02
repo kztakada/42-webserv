@@ -23,7 +23,7 @@ class IPAddress
     bool isWildcard() const;
 
     const std::string& toString() const;
-    const bool empty() const;
+    bool empty() const;
 
    private:
     explicit IPAddress(const std::string& ip_str)

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "http/http_method.hpp"
+#include "http/http_request.hpp"
 #include "http/status.hpp"
 #include "server/value_types.hpp"
 #include "utils/result.hpp"

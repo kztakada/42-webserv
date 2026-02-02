@@ -55,16 +55,24 @@ static bool isValidUriOrUrlTarget_(const std::string& target)
 }
 
 LocationDirectiveConf::LocationDirectiveConf()
-    : is_backward_search(false),
+    : client_max_body_size(http::HttpRequest::kDefaultMaxBodyBytes),
+      index_pages(),
+      path_pattern(),
+      root_dir(),
+      redirect_url(),
+      upload_store(),
+      allowed_methods(),
+      cgi_extensions(),
+      error_pages(),
+      redirect_status(http::HttpStatus::UNKNOWN),
+      is_backward_search(false),
       has_allowed_methods(false),
-      client_max_body_size(1024 * 1024),
       has_client_max_body_size(false),
       has_root_dir(false),
       has_index_pages(false),
       has_error_pages(false),
       auto_index(false),
-      has_auto_index(false),
-      redirect_status(http::HttpStatus::UNKNOWN)
+      has_auto_index(false)
 {
 }
 

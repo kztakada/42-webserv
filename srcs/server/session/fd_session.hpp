@@ -2,6 +2,7 @@
 #define WEBSERV_FD_SESSION_HPP_
 
 #include <ctime>
+#include <vector>
 
 #include "server/reactor/fd_event.hpp"
 #include "utils/result.hpp"
@@ -19,6 +20,20 @@ class FdSessionController;
 // セッションの基底抽象クラス
 class FdSession
 {
+   public:
+    struct FdWatchSpec
+    {
+        int fd;
+        bool watch_read;
+        bool watch_write;
+
+        FdWatchSpec() : fd(-1), watch_read(false), watch_write(false) {}
+        FdWatchSpec(int fd, bool watch_read, bool watch_write)
+            : fd(fd), watch_read(watch_read), watch_write(watch_write)
+        {
+        }
+    };
+
    protected:
     time_t last_active_time_;
     int timeout_seconds_;
@@ -46,6 +61,13 @@ class FdSession
 
     // セッション状態
     virtual bool isComplete() const = 0;
+
+    // Controller に委譲された直後に登録すべき watch を返す。
+    // 返却する fd は「OSの fd」であり、close は各 Session の責務。
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const
+    {
+        (void)out;
+    }
 
    private:
     FdSession();

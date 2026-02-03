@@ -1,0 +1,294 @@
+#include "server/session/fd_session_controller.hpp"
+
+#include "server/reactor/fd_event_reactor_factory.hpp"
+
+namespace server
+{
+
+FdSessionController::FdSessionController()
+    : reactor_(FdEventReactorFactory::create()),
+      active_sessions_(),
+      deleting_sessions_(),
+      deferred_delete_(),
+      fd_watch_state_(),
+      session_fds_()
+{
+}
+
+FdSessionController::~FdSessionController()
+{
+    clearAllSessions();
+    if (reactor_ != NULL)
+    {
+        delete reactor_;
+        reactor_ = NULL;
+    }
+}
+
+Result<void> FdSessionController::delegateSession(FdSession* session)
+{
+    if (session == NULL)
+        return Result<void>(ERROR, "null session");
+
+    active_sessions_.insert(session);
+
+    std::vector<FdSession::FdWatchSpec> specs;
+    session->getInitialWatchSpecs(&specs);
+    for (size_t i = 0; i < specs.size(); ++i)
+    {
+        Result<void> r = setWatch(
+            specs[i].fd, session, specs[i].watch_read, specs[i].watch_write);
+        if (r.isError())
+            return r;
+    }
+    return Result<void>();
+}
+
+void FdSessionController::requestDelete(FdSession* session)
+{
+    if (session == NULL)
+        return;
+    if (deleting_sessions_.find(session) != deleting_sessions_.end())
+        return;
+
+    deleting_sessions_.insert(session);
+    active_sessions_.erase(session);
+
+    // 関連fdのwatchを解除
+    detachAllFdsFromSession_(session);
+
+    // dispatch バッチ末尾で delete
+    deferred_delete_.push_back(session);
+}
+
+Result<void> FdSessionController::setWatch(
+    int fd, FdSession* session, bool watch_read, bool watch_write)
+{
+    return addOrRemoveWatch_(fd, session, watch_read, watch_write);
+}
+
+Result<void> FdSessionController::updateWatch(
+    int fd, bool watch_read, bool watch_write)
+{
+    std::map<int, FdWatchState>::iterator it = fd_watch_state_.find(fd);
+    if (it == fd_watch_state_.end())
+        return Result<void>(ERROR, "fd not registered");
+    return addOrRemoveWatch_(fd, it->second.session, watch_read, watch_write);
+}
+
+Result<void> FdSessionController::rebindWatch(
+    int fd, FdSession* new_session, bool watch_read, bool watch_write)
+{
+    unregisterFd(fd);
+    return setWatch(fd, new_session, watch_read, watch_write);
+}
+
+void FdSessionController::unregisterFd(int fd)
+{
+    if (reactor_ != NULL)
+    {
+        (void)reactor_->deleteWatch(fd);
+    }
+    detachFdFromSession_(fd);
+}
+
+Result<void> FdSessionController::addOrRemoveWatch_(
+    int fd, FdSession* session, bool want_read, bool want_write)
+{
+    if (reactor_ == NULL)
+        return Result<void>(ERROR, "reactor is null");
+    if (fd < 0)
+        return Result<void>(ERROR, "invalid fd");
+    if (session == NULL)
+        return Result<void>(ERROR, "null session");
+
+    std::map<int, FdWatchState>::iterator it = fd_watch_state_.find(fd);
+    if (it != fd_watch_state_.end())
+    {
+        if (it->second.session != session)
+            return Result<void>(ERROR, "fd already bound to another session");
+    }
+
+    const bool have_read =
+        (it != fd_watch_state_.end()) ? it->second.watch_read : false;
+    const bool have_write =
+        (it != fd_watch_state_.end()) ? it->second.watch_write : false;
+
+    // add
+    if (want_read && !have_read)
+    {
+        FdEvent ev;
+        ev.fd = fd;
+        ev.type = kReadEvent;
+        ev.session = session;
+        ev.is_opposite_close = false;
+        Result<void> r = reactor_->addWatch(ev);
+        if (r.isError())
+            return r;
+    }
+    if (want_write && !have_write)
+    {
+        FdEvent ev;
+        ev.fd = fd;
+        ev.type = kWriteEvent;
+        ev.session = session;
+        ev.is_opposite_close = false;
+        Result<void> r = reactor_->addWatch(ev);
+        if (r.isError())
+            return r;
+    }
+
+    // remove
+    if (!want_read && have_read)
+    {
+        FdEvent ev;
+        ev.fd = fd;
+        ev.type = kReadEvent;
+        ev.session = session;
+        ev.is_opposite_close = false;
+        (void)reactor_->removeWatch(ev);
+    }
+    if (!want_write && have_write)
+    {
+        FdEvent ev;
+        ev.fd = fd;
+        ev.type = kWriteEvent;
+        ev.session = session;
+        ev.is_opposite_close = false;
+        (void)reactor_->removeWatch(ev);
+    }
+
+    // 状態更新
+    if (want_read || want_write)
+    {
+        fd_watch_state_[fd] = FdWatchState(session, want_read, want_write);
+        session_fds_[session].insert(fd);
+    }
+    else
+    {
+        unregisterFd(fd);
+    }
+
+    return Result<void>();
+}
+
+void FdSessionController::detachFdFromSession_(int fd)
+{
+    std::map<int, FdWatchState>::iterator it = fd_watch_state_.find(fd);
+    if (it == fd_watch_state_.end())
+        return;
+
+    FdSession* s = it->second.session;
+    fd_watch_state_.erase(it);
+
+    std::map<FdSession*, std::set<int> >::iterator sit = session_fds_.find(s);
+    if (sit == session_fds_.end())
+        return;
+    sit->second.erase(fd);
+    if (sit->second.empty())
+        session_fds_.erase(sit);
+}
+
+void FdSessionController::detachAllFdsFromSession_(FdSession* session)
+{
+    std::map<FdSession*, std::set<int> >::iterator it =
+        session_fds_.find(session);
+    if (it == session_fds_.end())
+        return;
+
+    std::set<int> fds = it->second;
+    for (std::set<int>::iterator fit = fds.begin(); fit != fds.end(); ++fit)
+    {
+        const int fd = *fit;
+        if (reactor_ != NULL)
+        {
+            (void)reactor_->deleteWatch(fd);
+        }
+        detachFdFromSession_(fd);
+    }
+}
+
+void FdSessionController::dispatchEvents(
+    const std::vector<FdEvent>& occurred_events)
+{
+    for (size_t i = 0; i < occurred_events.size(); ++i)
+    {
+        const FdEvent& event = occurred_events[i];
+        FdSession* session = event.session;
+        if (session == NULL)
+        {
+            continue;
+        }
+        if (deleting_sessions_.find(session) != deleting_sessions_.end())
+            continue;
+
+        session->handleEvent(event);
+
+        // controller 主導でも回収する（session側が requestDelete
+        // を呼ばなくても安全）
+        if (session->isComplete())
+        {
+            requestDelete(session);
+        }
+    }
+
+    // dispatch 中に delete すると UAF になるため、末尾でまとめて破棄する。
+    for (size_t i = 0; i < deferred_delete_.size(); ++i)
+    {
+        delete deferred_delete_[i];
+    }
+    deferred_delete_.clear();
+    deleting_sessions_.clear();
+}
+
+void FdSessionController::handleTimeouts()
+{
+    std::vector<FdSession*> timed_out;
+    for (std::set<FdSession*>::iterator it = active_sessions_.begin();
+        it != active_sessions_.end(); ++it)
+    {
+        FdSession* s = *it;
+        if (s != NULL && s->isTimedOut())
+            timed_out.push_back(s);
+    }
+
+    for (size_t i = 0; i < timed_out.size(); ++i)
+    {
+        FdEvent ev;
+        ev.fd = -1;
+        ev.type = kTimeoutEvent;
+        ev.session = timed_out[i];
+        ev.is_opposite_close = false;
+
+        if (deleting_sessions_.find(timed_out[i]) != deleting_sessions_.end())
+            continue;
+
+        timed_out[i]->handleEvent(ev);
+        requestDelete(timed_out[i]);
+    }
+}
+
+void FdSessionController::clearAllSessions()
+{
+    // watch解除
+    if (reactor_ != NULL)
+    {
+        reactor_->clearAllEvents();
+    }
+    fd_watch_state_.clear();
+    session_fds_.clear();
+
+    for (std::set<FdSession*>::iterator it = active_sessions_.begin();
+        it != active_sessions_.end(); ++it)
+    {
+        delete *it;
+    }
+    active_sessions_.clear();
+
+    for (size_t i = 0; i < deferred_delete_.size(); ++i)
+        delete deferred_delete_[i];
+    deferred_delete_.clear();
+    deleting_sessions_.clear();
+}
+
+}  // namespace server

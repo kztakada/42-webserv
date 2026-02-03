@@ -87,6 +87,8 @@ class CgiSession : public FdSession
     virtual Result<void> handleEvent(const FdEvent& event);
     virtual bool isComplete() const;
 
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
+
     HttpSession* getParentSession() const { return parent_session_; }
 
     bool isHeadersComplete() const { return headers_complete_; }

@@ -1,6 +1,7 @@
 #ifndef WEBSERV_HTTP_SESSION_HPP_
 #define WEBSERV_HTTP_SESSION_HPP_
 
+#include <cstddef>
 #include <deque>
 
 #include "http/http_request.hpp"
@@ -30,6 +31,7 @@ class HttpSession : public FdSession
    public:
     static const long kDefaultTimeoutSec = 5;
     static const int kMaxInternalRedirects = 5;
+    static const size_t kMaxRecvBufferBytes = 64 * 1024;
 
     // テスト用
     const HttpRequest& request() const { return request_; }
@@ -53,6 +55,9 @@ class HttpSession : public FdSession
 
     IoBuffer recv_buffer_;  // クライアントからのデータ受信用
     IoBuffer send_buffer_;  // クライアントへのデータ送信用
+
+    bool socket_watch_read_;
+    bool socket_watch_write_;
 
     // --- 状態・制御 ---
     enum State
@@ -91,6 +96,8 @@ class HttpSession : public FdSession
           response_writer_(NULL),
           recv_buffer_(),
           send_buffer_(),
+          socket_watch_read_(false),
+          socket_watch_write_(false),
           state_(RECV_REQUEST),
           redirect_count_(0),
           active_cgi_session_(NULL),
@@ -106,6 +113,8 @@ class HttpSession : public FdSession
 
     virtual Result<void> handleEvent(const FdEvent& event);
     virtual bool isComplete() const;
+
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
 
     // CgiSession からの通知: CGI stdout のヘッダが確定した
     Result<void> onCgiHeadersReady(CgiSession& cgi);
@@ -124,6 +133,17 @@ class HttpSession : public FdSession
     Result<void> startCgi_();
     Result<http::HttpRequest> buildInternalRedirectRequest_(
         const std::string& uri_path) const;
+
+    // recv_buffer_ の残りだけで進められる分を処理する（read()しない）。
+    // keep-alive + pipelining 等で「次リクエストが既に user-space
+    // にある」場合の 停滞を防ぐ。
+    Result<void> consumeRecvBufferWithoutRead_();
+
+    // request_ が parse 完了した後の処理（routing/processor/CGI開始/response
+    // writer 構築）。
+    Result<void> prepareResponseOrCgi_();
+
+    Result<void> updateSocketWatches_();
 };
 
 }  // namespace server

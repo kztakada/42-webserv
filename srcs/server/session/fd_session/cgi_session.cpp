@@ -56,6 +56,19 @@ bool CgiSession::isComplete() const
     return true;
 }
 
+void CgiSession::getInitialWatchSpecs(
+    std::vector<FdSession::FdWatchSpec>* out) const
+{
+    if (out == NULL)
+        return;
+    if (pipe_in_.getFd() >= 0)
+        out->push_back(FdSession::FdWatchSpec(pipe_in_.getFd(), false, true));
+    if (pipe_out_.getFd() >= 0)
+        out->push_back(FdSession::FdWatchSpec(pipe_out_.getFd(), true, false));
+    if (pipe_err_.getFd() >= 0)
+        out->push_back(FdSession::FdWatchSpec(pipe_err_.getFd(), true, false));
+}
+
 Result<void> CgiSession::handleEvent(const FdEvent& event)
 {
     updateLastActiveTime();
@@ -63,17 +76,24 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
     if (event.type == kTimeoutEvent || event.type == kErrorEvent)
     {
         // 親側は CGI エラーとして扱う想定
+        controller_.requestDelete(this);
         return Result<void>(ERROR, "cgi session error/timeout");
     }
 
+    Result<void> r;
     if (pipe_in_.isSame(event.fd))
-        return handleStdin_(event.type);
-    if (pipe_out_.isSame(event.fd))
-        return handleStdout_(event.type);
-    if (pipe_err_.isSame(event.fd))
-        return handleStderr_(event.type);
+        r = handleStdin_(event.type);
+    else if (pipe_out_.isSame(event.fd))
+        r = handleStdout_(event.type);
+    else if (pipe_err_.isSame(event.fd))
+        r = handleStderr_(event.type);
+    else
+        r = Result<void>(ERROR, "Unknown FD in CgiSession");
 
-    return Result<void>(ERROR, "Unknown FD in CgiSession");
+    if (isComplete())
+        controller_.requestDelete(this);
+
+    return r;
 }
 
 Result<void> CgiSession::fillStdinBufferIfNeeded_()

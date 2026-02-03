@@ -132,3 +132,45 @@ TEST(RequestRouter, ReturnsBadRequestWhenPathEscapesRoot)
     EXPECT_EQ(routed.unwrap().getHttpStatus(), http::HttpStatus::BAD_REQUEST);
     EXPECT_EQ(routed.unwrap().getNextAction(), server::RESPOND_ERROR);
 }
+
+TEST(RequestRouter, BadRequestAppliesServerErrorPage400)
+{
+    server::ServerConfig config;
+
+    server::VirtualServerConf a;
+    EXPECT_TRUE(a.appendListen("", "8080").isOk());
+    EXPECT_TRUE(a.setRootDir("/var/www_a").isOk());
+    EXPECT_TRUE(a.appendServerName("a.example.com").isOk());
+    EXPECT_TRUE(
+        a.appendErrorPage(http::HttpStatus::BAD_REQUEST, "/errors/400.html")
+            .isOk());
+
+    server::LocationDirectiveConf a_loc;
+    EXPECT_TRUE(a_loc.setPathPattern("/a").isOk());
+    EXPECT_TRUE(a.appendLocation(a_loc).isOk());
+
+    EXPECT_TRUE(config.appendServer(a).isOk());
+    EXPECT_TRUE(config.isValid());
+
+    server::RequestRouter router(config);
+
+    http::HttpRequest req = mustParseRequest(
+        "GET /../secret HTTP/1.1\r\nHost: a.example.com\r\n\r\n");
+
+    utils::result::Result<IPAddress> ip =
+        IPAddress::parseIpv4Numeric("127.0.0.1");
+    ASSERT_TRUE(ip.isOk());
+    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    ASSERT_TRUE(port.isOk());
+
+    utils::result::Result<server::LocationRouting> routed =
+        router.route(req, ip.unwrap(), port.unwrap());
+    ASSERT_TRUE(routed.isOk());
+
+    EXPECT_EQ(routed.unwrap().getHttpStatus(), http::HttpStatus::BAD_REQUEST);
+    EXPECT_EQ(routed.unwrap().getNextAction(), server::REDIRECT_INTERNAL);
+    utils::result::Result<std::string> loc_hdr =
+        routed.unwrap().getRedirectLocation();
+    ASSERT_TRUE(loc_hdr.isOk());
+    EXPECT_EQ(loc_hdr.unwrap(), std::string("/errors/400.html"));
+}

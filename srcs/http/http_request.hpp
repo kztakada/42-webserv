@@ -20,6 +20,13 @@ using namespace utils::result;
 class HttpRequest
 {
    public:
+    // DoS耐性のための 防御的デフォルト としてよく使われる “業界の相場”
+    // に寄せた値
+    static const size_t kDefaultMaxRequestLineLength = 8192;
+    static const size_t kDefaultMaxHeaderBytes = 16384;
+    static const size_t kDefaultMaxHeaderCount = 100;
+    static const size_t kDefaultMaxBodyBytes = 1024 * 1024;
+
     // HTTPリクエストの最大量を定義してDos耐性を上げる
     struct Limits
     {
@@ -38,9 +45,27 @@ class HttpRequest
     ~HttpRequest();
 
     // パース機能（RFC 9112準拠）
-    Result<size_t> parse(const std::vector<utils::Byte>& buffer);
+    class BodySink
+    {
+       public:
+        virtual ~BodySink() {}
+        virtual Result<void> write(const utils::Byte* data, size_t len) = 0;
+    };
+
+    // buffer 先頭からの消費バイト数を返す。
+    // body は HttpRequest では保持せず、必要なら sink に逐次出力する。
+    // sink==NULL の場合、body は検証のみ行って破棄する。
+    // stop_after_headers=true
+    // の場合、ヘッダーセクション終端(CRLF)を読んだ時点で 必ず return
+    // し、同一バッファ内に混在している body は次回呼び出しに回す。
+    // ルーティング結果に応じて Limits(max_body_bytes) を差し替える用途を想定。
+    Result<size_t> parse(const std::vector<utils::Byte>& buffer,
+        BodySink* sink = NULL, bool stop_after_headers = false);
+    Result<size_t> parse(const utils::Byte* data, size_t len, BodySink* sink,
+        bool stop_after_headers);
 
     bool isParseComplete() const;
+    bool isHeaderComplete() const;
     bool hasParseError() const;
     HttpStatus getParseErrorStatus() const;
 
@@ -56,21 +81,20 @@ class HttpRequest
     Result<const std::vector<std::string>&> getHeader(
         const std::string& name) const;
     bool hasHeader(const std::string& name) const;
-
-    const std::vector<utils::Byte>& getBody() const;
-    unsigned long getBodySize() const;
     bool isChunkedEncoding() const;
+    bool hasBody() const;
+    size_t getDecodedBodyBytes() const;
+
+    // Keep-Alive
+    // 判定（HTTP/1.1はデフォルトKeep-Alive、HTTP/1.0はデフォルトclose）
+    // Connection: close / keep-alive を解釈した結果を返す。
+    bool shouldKeepAlive() const;
 
     // 防御的制限（DoS耐性）
     void setLimits(const Limits& limits);
     const Limits& getLimits() const;
 
    private:
-    static const size_t kDefaultMaxRequestLineLength;
-    static const size_t kDefaultMaxHeaderBytes;
-    static const size_t kDefaultMaxHeaderCount;
-    static const size_t kDefaultMaxBodyBytes;
-
     // パースの状態ステータス
     enum ParsingPhase
     {
@@ -119,7 +143,7 @@ class HttpRequest
 
     // メッセージボディ
     BodyFraming body_framing_;
-    std::vector<utils::Byte> body_;
+    size_t decoded_body_bytes_;
 
     // content-lengthタイプの管理
     unsigned long content_length_remaining_;
@@ -127,6 +151,8 @@ class HttpRequest
     // chunkタイプの実デコード管理
     ChunkPhase chunk_phase_;
     unsigned long chunk_bytes_remaining_;
+
+    bool should_keep_alive_;
 
     // 防御的制限（デフォルト有効）
     Limits limits_;
@@ -139,9 +165,10 @@ class HttpRequest
     Result<void> parseMethod(const std::string& method);
     Result<void> parseRequestTarget(const std::string& target);
     Result<void> parseVersion(const std::string& version);
-    Result<void> validateHeaders();
-    Result<size_t> parseChunkedBody(const std::vector<utils::Byte>& buffer);
-    std::string extractLine(const std::vector<utils::Byte>& buffer);
+    Result<void> validateHeaders(bool skip_body_size_check);
+    Result<size_t> parseChunkedBody(
+        const utils::Byte* data, size_t len, BodySink* sink);
+    std::string extractLine(const utils::Byte* data, size_t len);
     static std::string trimOws(const std::string& s);
 };
 

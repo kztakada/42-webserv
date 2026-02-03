@@ -52,6 +52,16 @@ std::string TcpConnectionSocketFd::getClientName() const
     return client_addr_.getName();
 }
 
+const SocketAddress& TcpConnectionSocketFd::getServerAddress() const
+{
+    return server_addr_;
+}
+
+const SocketAddress& TcpConnectionSocketFd::getClientAddress() const
+{
+    return client_addr_;
+}
+
 void TcpConnectionSocketFd::shutdown()
 {
     if (!is_shutdown_ && fd_ >= 0)

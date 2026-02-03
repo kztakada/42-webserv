@@ -5,7 +5,6 @@
 #include "server/request_router/request_router.hpp"
 #include "server/session/fd/tcp_socket/tcp_listen_socket_fd.hpp"
 #include "server/session/fd_session.hpp"
-#include "server/session/fd_session_controller.hpp"
 #include "utils/result.hpp"
 
 namespace server
@@ -22,40 +21,23 @@ class ListenerSession : public FdSession
     TcpListenSocketFd listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
 
     // --- 制御と外部連携 ---
-    FdSessionController& controller_;  // 監督者への参照
     const RequestRouter& router_;  // Serverから渡される参照、HttpSession生成用
-
-    virtual Result<void> onReadable();
-    virtual Result<void> onWritable();
-    virtual Result<void> onError();
-    virtual Result<void> onTimeout();
 
     void acceptNewConnection();
 
    public:
     explicit ListenerSession(int fd, const SocketAddress& listen_addr,
-        FdSessionController& controller, const RequestRouter& router)
-        : FdSession(kInfiniteTimeout),
-          listen_fd_(fd, listen_addr),
-          controller_(controller),
-          router_(router)
-    {
-        updateLastActiveTime();
-    };
-    virtual ~ListenerSession() {
-    };  // listen_fd_ のデストラクタで自動的に close される
+        FdSessionController& controller, const RequestRouter& router);
+    virtual ~ListenerSession();  // listen_fd_ のデストラクタで自動的に close
+                                 // される
 
-    virtual bool isTimedOut() const
-    {
-        return false;
-    };  // リスナーセッションはタイムアウトしない
+    virtual bool isTimedOut() const;  // リスナーセッションはタイムアウトしない
 
-    virtual Result<void> handleEvent(FdEvent* event, uint32_t triggered_events);
+    virtual Result<void> handleEvent(const FdEvent& event);
 
-    virtual bool isComplete() const
-    {
-        return false;
-    };  // リスナーセッションは常にアクティブ
+    virtual bool isComplete() const;  // リスナーセッションは常にアクティブ
+
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
 
    private:
     ListenerSession();

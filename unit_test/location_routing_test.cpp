@@ -109,6 +109,39 @@ TEST(LocationRouting, NoLocationMatchedBecomes404RespondError)
     EXPECT_EQ(r.getHttpStatus().getCode(), 404u);
 }
 
+TEST(LocationRouting, NoLocationMatchedAppliesServerErrorPage404)
+{
+    server::VirtualServerConf vs;
+    ASSERT_TRUE(vs.appendListen("", "8080").isOk());
+    ASSERT_TRUE(vs.setRootDir("/var/www").isOk());
+    ASSERT_TRUE(
+        vs.appendErrorPage(http::HttpStatus::NOT_FOUND, "/errors/404.html")
+            .isOk());
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/a").isOk());
+    ASSERT_TRUE(vs.appendLocation(loc).isOk());
+    ASSERT_TRUE(vs.isValid());
+
+    server::VirtualServer vserver(vs);
+    const server::LocationDirective* matched = vserver.findLocationByPath("/b");
+    ASSERT_TRUE(matched == NULL);
+
+    http::HttpRequest req = makeGet_("/b", "", 0);
+    utils::result::Result<server::ResolvedRequestContext> ctx_res =
+        server::ResolvedRequestContext::create(req);
+    ASSERT_TRUE(ctx_res.isOk());
+
+    server::LocationRouting r(
+        &vserver, matched, ctx_res.unwrap(), req, http::HttpStatus::OK);
+
+    EXPECT_EQ(r.getHttpStatus().getCode(), 404u);
+    EXPECT_EQ(r.getNextAction(), server::REDIRECT_INTERNAL);
+    utils::result::Result<std::string> loc_hdr = r.getRedirectLocation();
+    ASSERT_TRUE(loc_hdr.isOk());
+    EXPECT_EQ(loc_hdr.unwrap(), std::string("/errors/404.html"));
+}
+
 TEST(LocationRouting, ReturnRedirectExternalIsPrioritized)
 {
     server::LocationDirectiveConf loc;

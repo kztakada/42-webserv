@@ -10,12 +10,6 @@
 using namespace http;
 using namespace utils::result;
 
-// DoS耐性のための 防御的デフォルト としてよく使われる “業界の相場” に寄せた値
-const size_t HttpRequest::kDefaultMaxRequestLineLength = 8192;
-const size_t HttpRequest::kDefaultMaxHeaderBytes = 16384;
-const size_t HttpRequest::kDefaultMaxHeaderCount = 100;
-const size_t HttpRequest::kDefaultMaxBodyBytes = 1024 * 1024;
-
 static bool isLws(char c) { return c == ' ' || c == '\t'; }
 
 static bool isTchar(unsigned char c)
@@ -124,20 +118,21 @@ HttpRequest::Limits::Limits()
 }
 
 HttpRequest::HttpRequest()
-    : method_(HttpMethod::UNKNOWN),
+    : phase_(kRequestLine),
+      parse_error_status_(HttpStatus::OK),
+      cursor_(0),
+      method_(HttpMethod::UNKNOWN),
       method_string_(),
       path_(),
       query_string_(),
       minor_version_(1),
       headers_(),
-      body_(),
-      phase_(kRequestLine),
-      parse_error_status_(HttpStatus::OK),
       body_framing_(kNoBody),
+      decoded_body_bytes_(0),
       content_length_remaining_(0),
-      cursor_(0),
       chunk_phase_(kChunkSizeLine),
       chunk_bytes_remaining_(0),
+      should_keep_alive_(true),
       limits_(),
       header_bytes_parsed_(0),
       header_count_(0)
@@ -145,20 +140,21 @@ HttpRequest::HttpRequest()
 }
 
 HttpRequest::HttpRequest(const HttpRequest& rhs)
-    : method_(rhs.method_),
+    : phase_(rhs.phase_),
+      parse_error_status_(rhs.parse_error_status_),
+      cursor_(rhs.cursor_),
+      method_(rhs.method_),
       method_string_(rhs.method_string_),
       path_(rhs.path_),
       query_string_(rhs.query_string_),
       minor_version_(rhs.minor_version_),
       headers_(rhs.headers_),
-      body_(rhs.body_),
-      phase_(rhs.phase_),
-      parse_error_status_(rhs.parse_error_status_),
       body_framing_(rhs.body_framing_),
+      decoded_body_bytes_(rhs.decoded_body_bytes_),
       content_length_remaining_(rhs.content_length_remaining_),
-      cursor_(rhs.cursor_),
       chunk_phase_(rhs.chunk_phase_),
       chunk_bytes_remaining_(rhs.chunk_bytes_remaining_),
+      should_keep_alive_(rhs.should_keep_alive_),
       limits_(rhs.limits_),
       header_bytes_parsed_(rhs.header_bytes_parsed_),
       header_count_(rhs.header_count_)
@@ -175,7 +171,6 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& rhs)
         query_string_ = rhs.query_string_;
         minor_version_ = rhs.minor_version_;
         headers_ = rhs.headers_;
-        body_ = rhs.body_;
         phase_ = rhs.phase_;
         parse_error_status_ = rhs.parse_error_status_;
         body_framing_ = rhs.body_framing_;
@@ -183,6 +178,8 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& rhs)
         cursor_ = rhs.cursor_;
         chunk_phase_ = rhs.chunk_phase_;
         chunk_bytes_remaining_ = rhs.chunk_bytes_remaining_;
+        decoded_body_bytes_ = rhs.decoded_body_bytes_;
+        should_keep_alive_ = rhs.should_keep_alive_;
 
         limits_ = rhs.limits_;
         header_bytes_parsed_ = rhs.header_bytes_parsed_;
@@ -238,17 +235,14 @@ bool HttpRequest::hasHeader(const std::string& name) const
     return headers_.find(name) != headers_.end();
 }
 
-const std::vector<utils::Byte>& HttpRequest::getBody() const { return body_; }
-
-unsigned long HttpRequest::getBodySize() const
-{
-    return static_cast<unsigned long>(body_.size());
-}
-
 bool HttpRequest::isChunkedEncoding() const
 {
     return body_framing_ == kChunked;
 }
+
+bool HttpRequest::hasBody() const { return body_framing_ != kNoBody; }
+
+size_t HttpRequest::getDecodedBodyBytes() const { return decoded_body_bytes_; }
 
 void HttpRequest::setLimits(const Limits& limits) { limits_ = limits; }
 
@@ -265,22 +259,24 @@ std::string HttpRequest::trimOws(const std::string& s)
     return s.substr(start, end - start);
 }
 
-std::string HttpRequest::extractLine(const std::vector<utils::Byte>& buffer)
+std::string HttpRequest::extractLine(const utils::Byte* data, size_t len)
 {
-    if (cursor_ >= buffer.size())
+    if (data == NULL)
         return std::string();
-    if (buffer.size() - cursor_ < 2)
+    if (cursor_ >= len)
+        return std::string();
+    if (len - cursor_ < 2)
         return std::string();
 
-    for (size_t i = cursor_; i + 1 < buffer.size(); ++i)
+    for (size_t i = cursor_; i + 1 < len; ++i)
     {
-        if (buffer[i] == '\r' && buffer[i + 1] == '\n')
+        if (data[i] == '\r' && data[i + 1] == '\n')
         {
             const size_t len = (i + 2) - cursor_;
             std::string line;
             line.reserve(len);
             for (size_t j = cursor_; j < i + 2; ++j)
-                line += static_cast<char>(buffer[j]);
+                line += static_cast<char>(data[j]);
             cursor_ = i + 2;
             return line;
         }
@@ -519,7 +515,7 @@ Result<void> HttpRequest::parseVersion(const std::string& version)
     return Result<void>();
 }
 
-Result<void> HttpRequest::validateHeaders()
+Result<void> HttpRequest::validateHeaders(bool skip_body_size_check)
 {
     // RFC 9112: Host is required in HTTP/1.1
     if (minor_version_ == 1 && !hasHeader("Host"))
@@ -530,6 +526,37 @@ Result<void> HttpRequest::validateHeaders()
 
     body_framing_ = kNoBody;
     content_length_remaining_ = 0;
+
+    // Keep-Alive 判定
+    // RFC 9112: HTTP/1.1 は持続接続がデフォルト。Connection: close で無効化。
+    // HTTP/1.0 は非持続がデフォルト。Connection: keep-alive で有効化。
+    should_keep_alive_ = (minor_version_ == 1);
+    if (hasHeader("Connection"))
+    {
+        Result<const std::vector<std::string>&> c = getHeader("Connection");
+        if (!c.isOk() || c.unwrap().empty())
+        {
+            parse_error_status_ = HttpStatus::BAD_REQUEST;
+            return Result<void>(ERROR, "invalid Connection header");
+        }
+
+        std::vector<std::string> raw_tokens;
+        splitCommaSeparatedValues(c.unwrap(), raw_tokens);
+        for (size_t i = 0; i < raw_tokens.size(); ++i)
+        {
+            std::string t = trimOws(raw_tokens[i]);
+            if (t.empty() || containsOws(t))
+            {
+                parse_error_status_ = HttpStatus::BAD_REQUEST;
+                return Result<void>(ERROR, "invalid Connection token");
+            }
+            t = toLowerAscii(t);
+            if (t == "close")
+                should_keep_alive_ = false;
+            else if (t == "keep-alive")
+                should_keep_alive_ = true;
+        }
+    }
 
     const bool has_te_header = hasHeader("Transfer-Encoding");
     const bool has_cl_header = hasHeader("Content-Length");
@@ -647,12 +674,15 @@ Result<void> HttpRequest::validateHeaders()
         }
 
         content_length_remaining_ = first;
-        if (limits_.max_body_bytes != 0 &&
-            content_length_remaining_ >
-                static_cast<unsigned long>(limits_.max_body_bytes))
+        if (!skip_body_size_check)
         {
-            parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
-            return Result<void>(ERROR, "body too large");
+            if (limits_.max_body_bytes != 0 &&
+                content_length_remaining_ >
+                    static_cast<unsigned long>(limits_.max_body_bytes))
+            {
+                parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
+                return Result<void>(ERROR, "body too large");
+            }
         }
         body_framing_ =
             (content_length_remaining_ > 0) ? kContentLength : kNoBody;
@@ -665,8 +695,10 @@ Result<void> HttpRequest::validateHeaders()
     return Result<void>();
 }
 
+bool HttpRequest::shouldKeepAlive() const { return should_keep_alive_; }
+
 Result<size_t> HttpRequest::parseChunkedBody(
-    const std::vector<utils::Byte>& buffer)
+    const utils::Byte* data, size_t len, BodySink* sink)
 {
     // RFC 9112: Transfer-Encoding: chunked
     // trailer は認識するが保持せず読み飛ばす（課題要件に合わせる）
@@ -682,7 +714,7 @@ Result<size_t> HttpRequest::parseChunkedBody(
         {
             // chunk-size行（16進数+optionalchunk-ext）を1行（CRLF）として読む
             // 例）5;key=value\r\n
-            std::string line = extractLine(buffer);
+            std::string line = extractLine(data, len);
             if (line.empty())
                 break;  // データ不足
 
@@ -747,7 +779,7 @@ Result<size_t> HttpRequest::parseChunkedBody(
             // chunk-dataを可能な限りボディにコピーする（足りない分は次回に回す）
 
             // バッファの中でchunk-data以降の文字数を保存
-            const size_t available = buffer.size() - cursor_;
+            const size_t available = (cursor_ < len) ? (len - cursor_) : 0;
             if (available == 0)
                 break;
 
@@ -757,17 +789,25 @@ Result<size_t> HttpRequest::parseChunkedBody(
                     ? available
                     : static_cast<size_t>(chunk_bytes_remaining_);
 
-            if (wouldExceedLimit(body_.size(), take, limits_.max_body_bytes))
+            if (wouldExceedLimit(
+                    decoded_body_bytes_, take, limits_.max_body_bytes))
             {
                 phase_ = kError;
                 parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
                 return Result<size_t>(ERROR, "body too large");
             }
 
-            // chunk-dataをbody_に保存
-            body_.insert(body_.end(),
-                buffer.begin() + static_cast<std::ptrdiff_t>(cursor_),
-                buffer.begin() + static_cast<std::ptrdiff_t>(cursor_ + take));
+            if (sink != NULL)
+            {
+                Result<void> w = sink->write(data + cursor_, take);
+                if (!w.isOk())
+                {
+                    phase_ = kError;
+                    parse_error_status_ = HttpStatus::SERVER_ERROR;
+                    return Result<size_t>(ERROR, w.getErrorMessage());
+                }
+            }
+            decoded_body_bytes_ += take;
 
             cursor_ += take;
             chunk_bytes_remaining_ -= take;
@@ -781,9 +821,9 @@ Result<size_t> HttpRequest::parseChunkedBody(
         else if (chunk_phase_ == kChunkDataCrlf)
         {
             // chunk-data の直後にある CRLF を検証して消費する（\r\n）
-            if (buffer.size() - cursor_ < 2)
+            if (len - cursor_ < 2)
                 break;
-            if (buffer[cursor_] != '\r' || buffer[cursor_ + 1] != '\n')
+            if (data[cursor_] != '\r' || data[cursor_ + 1] != '\n')
             {
                 phase_ = kError;
                 parse_error_status_ = HttpStatus::BAD_REQUEST;
@@ -802,7 +842,7 @@ Result<size_t> HttpRequest::parseChunkedBody(
             // trailer-part = *( field-line CRLF )
             // 最終 CRLF まで読み飛ばす
             // （空行 "\r\n" が来たら chunked-body 終了）
-            std::string line = extractLine(buffer);
+            std::string line = extractLine(data, len);
             if (line.empty())
                 break;
 
@@ -866,7 +906,15 @@ Result<size_t> HttpRequest::parseChunkedBody(
     return Result<size_t>(cursor_ - start_cursor);
 }
 
-Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
+Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer,
+    BodySink* sink, bool stop_after_headers)
+{
+    const utils::Byte* p = (buffer.empty()) ? NULL : &buffer[0];
+    return parse(p, buffer.size(), sink, stop_after_headers);
+}
+
+Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
+    BodySink* sink, bool stop_after_headers)
 {
     // 呼び出し側が「今回渡したバッファの先頭から何バイト消費したか」で管理できるよう、
     // parse()のたびにカーソルは先頭(0)から開始する。
@@ -888,12 +936,12 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
         if (phase_ == kRequestLine)
         {
             // リクエストライン解析
-            std::string line = extractLine(buffer);  // 「\r\n」を改行とする
+            std::string line = extractLine(data, len);  // 「\r\n」を改行とする
             if (line.empty())
             {
                 // CRLF が来ないまま巨大な request-line を溜め込ませない
                 if (limits_.max_request_line_length != 0 &&
-                    buffer.size() > limits_.max_request_line_length + 2)
+                    len > limits_.max_request_line_length + 2)
                 {
                     phase_ = kError;
                     parse_error_status_ = HttpStatus::URI_TOO_LONG;
@@ -923,12 +971,12 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
         else if (phase_ == kHeaderField)
         {
             // ヘッダー解析
-            std::string line = extractLine(buffer);  // 「\r\n」を改行とする
+            std::string line = extractLine(data, len);  // 「\r\n」を改行とする
             if (line.empty())
             {
                 // CRLF が来ないまま巨大な header section を溜め込ませない
-                if (wouldExceedLimit(header_bytes_parsed_, buffer.size(),
-                        limits_.max_header_bytes))
+                if (wouldExceedLimit(
+                        header_bytes_parsed_, len, limits_.max_header_bytes))
                 {
                     phase_ = kError;
                     parse_error_status_ = HttpStatus::BAD_REQUEST;
@@ -959,7 +1007,7 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
             {
                 header_bytes_parsed_ += line.size();
                 // ヘッダー終了
-                Result<void> result = validateHeaders();
+                Result<void> result = validateHeaders(stop_after_headers);
                 if (!result.isOk())
                 {
                     phase_ = kError;
@@ -970,6 +1018,9 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
                     phase_ = kComplete;
                 else
                     phase_ = kBody;
+
+                if (stop_after_headers && phase_ == kBody)
+                    break;
             }
             else
             {
@@ -997,7 +1048,7 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
             // ボディ解析
             if (body_framing_ == kChunked)
             {
-                Result<size_t> result = parseChunkedBody(buffer);
+                Result<size_t> result = parseChunkedBody(data, len, sink);
                 if (!result.isOk())
                     return Result<size_t>(ERROR, result.getErrorMessage());
 
@@ -1016,8 +1067,7 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
                     break;
                 }
 
-                const size_t available =
-                    (cursor_ < buffer.size()) ? (buffer.size() - cursor_) : 0;
+                const size_t available = (cursor_ < len) ? (len - cursor_) : 0;
                 if (available == 0)
                     break;  // データ不足
 
@@ -1027,17 +1077,24 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
                         : static_cast<size_t>(content_length_remaining_);
 
                 if (wouldExceedLimit(
-                        body_.size(), take, limits_.max_body_bytes))
+                        decoded_body_bytes_, take, limits_.max_body_bytes))
                 {
                     phase_ = kError;
                     parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
                     return Result<size_t>(ERROR, "body too large");
                 }
 
-                body_.insert(body_.end(),
-                    buffer.begin() + static_cast<std::ptrdiff_t>(cursor_),
-                    buffer.begin() +
-                        static_cast<std::ptrdiff_t>(cursor_ + take));
+                if (sink != NULL)
+                {
+                    Result<void> w = sink->write(data + cursor_, take);
+                    if (!w.isOk())
+                    {
+                        phase_ = kError;
+                        parse_error_status_ = HttpStatus::SERVER_ERROR;
+                        return Result<size_t>(ERROR, w.getErrorMessage());
+                    }
+                }
+                decoded_body_bytes_ += take;
                 cursor_ += take;
                 content_length_remaining_ -= static_cast<unsigned long>(take);
 
@@ -1050,22 +1107,30 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
             {
                 // connection close まで読み続ける方式（現状は complete
                 // にできない）
-                const size_t available =
-                    (cursor_ < buffer.size()) ? (buffer.size() - cursor_) : 0;
+                const size_t available = (cursor_ < len) ? (len - cursor_) : 0;
                 if (available == 0)
                     break;
 
                 if (wouldExceedLimit(
-                        body_.size(), available, limits_.max_body_bytes))
+                        decoded_body_bytes_, available, limits_.max_body_bytes))
                 {
                     phase_ = kError;
                     parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
                     return Result<size_t>(ERROR, "body too large");
                 }
-                body_.insert(body_.end(),
-                    buffer.begin() + static_cast<std::ptrdiff_t>(cursor_),
-                    buffer.end());
-                cursor_ = buffer.size();
+
+                if (sink != NULL)
+                {
+                    Result<void> w = sink->write(data + cursor_, available);
+                    if (!w.isOk())
+                    {
+                        phase_ = kError;
+                        parse_error_status_ = HttpStatus::SERVER_ERROR;
+                        return Result<size_t>(ERROR, w.getErrorMessage());
+                    }
+                }
+                decoded_body_bytes_ += available;
+                cursor_ = len;
                 break;
             }
             else
@@ -1077,4 +1142,9 @@ Result<size_t> HttpRequest::parse(const std::vector<utils::Byte>& buffer)
     }
 
     return Result<size_t>(cursor_);
+}
+
+bool HttpRequest::isHeaderComplete() const
+{
+    return phase_ == kBody || phase_ == kComplete;
 }

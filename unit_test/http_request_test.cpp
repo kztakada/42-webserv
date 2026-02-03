@@ -14,6 +14,26 @@ static std::vector<utils::Byte> toBytes(const char* s)
     return out;
 }
 
+class StringBodySink : public http::HttpRequest::BodySink
+{
+   public:
+    StringBodySink() : out_() {}
+
+    virtual utils::result::Result<void> write(
+        const utils::Byte* data, size_t len)
+    {
+        if (data == NULL || len == 0)
+            return utils::result::Result<void>();
+        out_.append(reinterpret_cast<const char*>(data), len);
+        return utils::result::Result<void>();
+    }
+
+    const std::string& str() const { return out_; }
+
+   private:
+    std::string out_;
+};
+
 // 簡単な成功例
 TEST(HttpRequest, ParsesSimpleGetWithQueryAndHost)
 {
@@ -32,7 +52,7 @@ TEST(HttpRequest, ParsesSimpleGetWithQueryAndHost)
     EXPECT_EQ(std::string("name=bob"), req.getQueryString());
     EXPECT_EQ(1, req.getMinorVersion());
     EXPECT_TRUE(req.hasHeader("Host"));
-    EXPECT_EQ(0ul, req.getBodySize());
+    EXPECT_EQ(static_cast<size_t>(0), req.getDecodedBodyBytes());
 }
 
 // HTTP 1.0なのでHost情報がなくてもよい
@@ -91,7 +111,8 @@ TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
             << kCases[i].token;
         EXPECT_EQ(std::string("/test"), req.getPath()) << kCases[i].token;
         EXPECT_EQ(std::string(""), req.getQueryString()) << kCases[i].token;
-        EXPECT_EQ(0ul, req.getBodySize()) << kCases[i].token;
+        EXPECT_EQ(static_cast<size_t>(0), req.getDecodedBodyBytes())
+            << kCases[i].token;
     }
 }
 
@@ -154,31 +175,32 @@ TEST(HttpRequest, ParsesOptionsAsteriskFormTarget)
 TEST(HttpRequest, ParsesChunkedBodyAndIgnoresTrailer)
 {
     http::HttpRequest req;
+    StringBodySink sink;
 
     // 2回に分けて流し込み（呼び出し側は「新しく受信した分だけ」を渡す想定）
     std::vector<utils::Byte> part1 = toBytes(
         "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: "
         "chunked\r\n\r\n"
         "4\r\nWi");
-    utils::result::Result<size_t> r1 = req.parse(part1);
+    utils::result::Result<size_t> r1 = req.parse(part1, &sink);
     EXPECT_TRUE(r1.isOk());
 
     // 残りを追加（chunk-data途中の続き + trailer + 終端）
     std::vector<utils::Byte> part2 =
         toBytes("ki\r\n5\r\npedia\r\n0\r\nX-Trailer: ignored\r\n\r\n");
-    utils::result::Result<size_t> r2 = req.parse(part2);
+    utils::result::Result<size_t> r2 = req.parse(part2, &sink);
     EXPECT_TRUE(r2.isOk());
 
     EXPECT_TRUE(req.isParseComplete());
     EXPECT_FALSE(req.hasParseError());
-    EXPECT_EQ(std::string("Wikipedia"),
-        std::string(req.getBody().begin(), req.getBody().end()));
+    EXPECT_EQ(std::string("Wikipedia"), sink.str());
 }
 
 // 2回に分けて送信（増分パース / Content-Length）
 TEST(HttpRequest, ParsesContentLengthBody)
 {
     http::HttpRequest req;
+    StringBodySink sink;
 
     // まず1回目の流し込み（呼び出し側は「新しく受信した分だけ」を渡す想定）
     std::vector<utils::Byte> part1 = toBytes(
@@ -187,7 +209,7 @@ TEST(HttpRequest, ParsesContentLengthBody)
         "Content-Length: 9\r\n"
         "\r\n"
         "Wi");
-    utils::result::Result<size_t> r1 = req.parse(part1);
+    utils::result::Result<size_t> r1 = req.parse(part1, &sink);
     EXPECT_TRUE(r1.isOk());
     EXPECT_EQ(part1.size(), r1.unwrap());
     EXPECT_FALSE(req.isParseComplete());
@@ -195,20 +217,20 @@ TEST(HttpRequest, ParsesContentLengthBody)
 
     // 次に2回目の流し込み
     std::vector<utils::Byte> part2 = toBytes("kipedia");
-    utils::result::Result<size_t> r2 = req.parse(part2);
+    utils::result::Result<size_t> r2 = req.parse(part2, &sink);
     EXPECT_TRUE(r2.isOk());
     EXPECT_EQ(part2.size(), r2.unwrap());
 
     EXPECT_TRUE(req.isParseComplete());
     EXPECT_FALSE(req.hasParseError());
-    EXPECT_EQ(std::string("Wikipedia"),
-        std::string(req.getBody().begin(), req.getBody().end()));
+    EXPECT_EQ(std::string("Wikipedia"), sink.str());
 }
 
 // Content-Lengthが複数設定されている場合、入力値が一緒であれば受け入れる
 TEST(HttpRequest, AcceptsMultipleContentLengthSameValue)
 {
     http::HttpRequest req;
+    StringBodySink sink;
     std::vector<utils::Byte> buf = toBytes(
         "POST / HTTP/1.1\r\n"
         "Host: example.com\r\n"
@@ -217,18 +239,18 @@ TEST(HttpRequest, AcceptsMultipleContentLengthSameValue)
         "\r\n"
         "Wikipedia");
 
-    utils::result::Result<size_t> r = req.parse(buf);
+    utils::result::Result<size_t> r = req.parse(buf, &sink);
     EXPECT_TRUE(r.isOk());
     EXPECT_TRUE(req.isParseComplete());
     EXPECT_FALSE(req.hasParseError());
-    EXPECT_EQ(std::string("Wikipedia"),
-        std::string(req.getBody().begin(), req.getBody().end()));
+    EXPECT_EQ(std::string("Wikipedia"), sink.str());
 }
 
 // Content-Lengthの値が全て一致
 TEST(HttpRequest, AcceptsContentLengthListSameValue)
 {
     http::HttpRequest req;
+    StringBodySink sink;
     std::vector<utils::Byte> buf = toBytes(
         "POST / HTTP/1.1\r\n"
         "Host: example.com\r\n"
@@ -236,11 +258,10 @@ TEST(HttpRequest, AcceptsContentLengthListSameValue)
         "\r\n"
         "Wikipedia");
 
-    utils::result::Result<size_t> r = req.parse(buf);
+    utils::result::Result<size_t> r = req.parse(buf, &sink);
     EXPECT_TRUE(r.isOk());
     EXPECT_FALSE(req.hasParseError());
-    EXPECT_EQ(std::string("Wikipedia"),
-        std::string(req.getBody().begin(), req.getBody().end()));
+    EXPECT_EQ(std::string("Wikipedia"), sink.str());
 }
 
 // errorハンドリング　-------------------------------------------------------------------
@@ -313,6 +334,7 @@ TEST(HttpRequest, RejectsMultipleContentLengthDifferentValue)
 TEST(HttpRequest, AcceptsTransferEncodingWithContentLengthAndIgnoresIt)
 {
     http::HttpRequest req;
+    StringBodySink sink;
     std::vector<utils::Byte> buf = toBytes(
         "POST / HTTP/1.1\r\n"
         "Host: example.com\r\n"
@@ -324,12 +346,63 @@ TEST(HttpRequest, AcceptsTransferEncodingWithContentLengthAndIgnoresIt)
         "5\r\npedia\r\n"
         "0\r\n\r\n");
 
-    utils::result::Result<size_t> r = req.parse(buf);
+    utils::result::Result<size_t> r = req.parse(buf, &sink);
     EXPECT_TRUE(r.isOk());
     EXPECT_TRUE(req.isParseComplete());
     EXPECT_FALSE(req.hasParseError());
-    EXPECT_EQ(std::string("Wikipedia"),
-        std::string(req.getBody().begin(), req.getBody().end()));
+    EXPECT_EQ(std::string("Wikipedia"), sink.str());
+}
+
+TEST(HttpRequest, Http11DefaultsToKeepAlive)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes(
+        "GET / HTTP/1.1\r\n"
+        "Host: example.com\r\n"
+        "\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+    EXPECT_TRUE(r.isOk());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_TRUE(req.shouldKeepAlive());
+}
+
+TEST(HttpRequest, Http11ConnectionCloseDisablesKeepAlive)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes(
+        "GET / HTTP/1.1\r\n"
+        "Host: example.com\r\n"
+        "Connection: close\r\n"
+        "\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+    EXPECT_TRUE(r.isOk());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.shouldKeepAlive());
+}
+
+TEST(HttpRequest, Http10DefaultsToClose)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes(
+        "GET / HTTP/1.0\r\n"
+        "\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+    EXPECT_TRUE(r.isOk());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.shouldKeepAlive());
+}
+
+TEST(HttpRequest, Http10ConnectionKeepAliveEnablesKeepAlive)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes(
+        "GET / HTTP/1.0\r\n"
+        "Connection: keep-alive\r\n"
+        "\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+    EXPECT_TRUE(r.isOk());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_TRUE(req.shouldKeepAlive());
 }
 
 TEST(HttpRequest, RejectsInvalidMethodToken)

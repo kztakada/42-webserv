@@ -2,6 +2,7 @@
 #define WEBSERV_FD_SESSION_HPP_
 
 #include <ctime>
+#include <vector>
 
 #include "server/reactor/fd_event.hpp"
 #include "utils/result.hpp"
@@ -14,26 +15,43 @@ namespace server
 {
 using namespace utils::result;
 
+class FdSessionController;
+
 // セッションの基底抽象クラス
 class FdSession
 {
+   public:
+    struct FdWatchSpec
+    {
+        int fd;
+        bool watch_read;
+        bool watch_write;
+
+        FdWatchSpec() : fd(-1), watch_read(false), watch_write(false) {}
+        FdWatchSpec(int fd, bool watch_read, bool watch_write)
+            : fd(fd), watch_read(watch_read), watch_write(watch_write)
+        {
+        }
+    };
+
    protected:
     time_t last_active_time_;
     int timeout_seconds_;
 
-    // イベントハンドラ（派生クラスで実装）
-    virtual Result<void> onReadable() = 0;
-    virtual Result<void> onWritable() = 0;
-    virtual Result<void> onError() = 0;
-    virtual Result<void> onTimeout() = 0;
+    // --- 制御と外部連携 ---
+    FdSessionController& controller_;  // 監督者への参照
 
    public:
-    explicit FdSession(int timeout_seconds)
-        : last_active_time_(time(NULL)), timeout_seconds_(timeout_seconds) {};
+    explicit FdSession(FdSessionController& controller, int timeout_seconds)
+        : last_active_time_(time(NULL)),
+          timeout_seconds_(timeout_seconds),
+          controller_(controller) {};
     virtual ~FdSession() {};
 
     // タイムアウト管理
     void updateLastActiveTime() { last_active_time_ = time(NULL); }
+    time_t getLastActiveTime() const { return last_active_time_; }
+    int getTimeoutSeconds() const { return timeout_seconds_; }
     virtual bool isTimedOut() const
     {
         time_t current_time = time(NULL);
@@ -41,11 +59,17 @@ class FdSession
     }
 
     // イベント振り分け
-    virtual Result<void> handleEvent(FdEvent* event,
-        uint32_t triggered_events) = 0;  // FdEventのRoleを見て振り分けさせる
+    virtual Result<void> handleEvent(const FdEvent& event) = 0;
 
     // セッション状態
     virtual bool isComplete() const = 0;
+
+    // Controller に委譲された直後に登録すべき watch を返す。
+    // 返却する fd は「OSの fd」であり、close は各 Session の責務。
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const
+    {
+        (void)out;
+    }
 
    private:
     FdSession();

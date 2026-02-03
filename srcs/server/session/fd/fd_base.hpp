@@ -22,6 +22,17 @@ class FdBase
         }
     }
 
+    int getFd() const { return fd_; }
+
+    // FD の所有権を呼び出し側へ移譲する。
+    // 以降、このオブジェクトのデストラクタでは close されない。
+    int release()
+    {
+        const int released = fd_;
+        fd_ = -1;
+        return released;
+    }
+
    private:
     FdBase();                          // デフォルトコンストラクタ禁止
     FdBase(const FdBase&);             // コピー禁止

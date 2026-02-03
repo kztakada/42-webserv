@@ -92,4 +92,21 @@ const LocationDirective* VirtualServer::findLocationByPath(
     return best;
 }
 
+bool VirtualServer::tryGetErrorPagePath(
+    const http::HttpStatus& status, std::string* out_path) const
+{
+    ErrorPagesMap::const_iterator it = conf_.error_pages.find(status);
+    if (it == conf_.error_pages.end())
+    {
+        if (out_path)
+            out_path->clear();
+        return false;
+    }
+    if (out_path)
+    {
+        *out_path = it->second;
+    }
+    return true;
+}
+
 }  // namespace server

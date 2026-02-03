@@ -28,6 +28,9 @@ class TcpConnectionSocketFd : public FdBase
     PortType getClientPort() const;
     std::string getClientName() const;
 
+    const SocketAddress& getServerAddress() const;
+    const SocketAddress& getClientAddress() const;
+
     void shutdown();
     bool isShutdown() const;
     virtual std::string getResourceType() const;

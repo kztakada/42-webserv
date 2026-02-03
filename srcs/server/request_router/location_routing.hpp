@@ -95,6 +95,11 @@ class LocationRouting
 
     utils::result::Result<unsigned long> clientMaxBodySize() const;
 
+    // error_page の設定を問い合わせる（設定がなければ false）。
+    // out_path はそのまま location 設定の値（URIパス or URL）を返す。
+    bool tryGetErrorPagePath(
+        const http::HttpStatus& status, std::string* out_path) const;
+
     // Session層でファイルアクセス直前に呼ぶ想定。
     // - location.root を root_dir として、request_path から location pattern
     // を除去したパスを辿る。

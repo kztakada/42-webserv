@@ -22,6 +22,8 @@ class FdBase
         }
     }
 
+    int getFd() const { return fd_; }
+
    private:
     FdBase();                          // デフォルトコンストラクタ禁止
     FdBase(const FdBase&);             // コピー禁止

@@ -4,6 +4,7 @@
 #include <ctime>
 
 #include "server/reactor/fd_event.hpp"
+#include "server/session/fd_session_controller.hpp"
 #include "utils/result.hpp"
 
 // セッションとは、
@@ -21,15 +22,14 @@ class FdSession
     time_t last_active_time_;
     int timeout_seconds_;
 
-    // イベントハンドラ（派生クラスで実装）
-    virtual Result<void> onReadable() = 0;
-    virtual Result<void> onWritable() = 0;
-    virtual Result<void> onError() = 0;
-    virtual Result<void> onTimeout() = 0;
+    // --- 制御と外部連携 ---
+    FdSessionController& controller_;  // 監督者への参照
 
    public:
-    explicit FdSession(int timeout_seconds)
-        : last_active_time_(time(NULL)), timeout_seconds_(timeout_seconds) {};
+    explicit FdSession(FdSessionController& controller, int timeout_seconds)
+        : controller_(controller),
+          last_active_time_(time(NULL)),
+          timeout_seconds_(timeout_seconds) {};
     virtual ~FdSession() {};
 
     // タイムアウト管理
@@ -41,8 +41,7 @@ class FdSession
     }
 
     // イベント振り分け
-    virtual Result<void> handleEvent(FdEvent* event,
-        uint32_t triggered_events) = 0;  // FdEventのRoleを見て振り分けさせる
+    virtual Result<void> handleEvent(const FdEvent& event) = 0;
 
     // セッション状態
     virtual bool isComplete() const = 0;

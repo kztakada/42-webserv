@@ -1,0 +1,1 @@
+hello from sample/02_error_page

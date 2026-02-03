@@ -189,4 +189,49 @@ Result<BodySource::ReadResult> PrefetchedFdBodySource::read(size_t max_bytes)
     return r;
 }
 
+StringBodySource::StringBodySource(const std::string& body) : body_(), pos_(0)
+{
+    body_.reserve(body.size());
+    for (std::string::size_type i = 0; i < body.size(); ++i)
+    {
+        body_.push_back(static_cast<utils::Byte>(body[i]));
+    }
+}
+
+StringBodySource::~StringBodySource() {}
+
+Result<BodySource::ReadResult> StringBodySource::read(size_t max_bytes)
+{
+    ReadResult r;
+
+    if (pos_ >= body_.size())
+    {
+        r.status = READ_EOF;
+        return r;
+    }
+
+    if (max_bytes == 0)
+    {
+        r.status = READ_OK;
+        return r;
+    }
+
+    size_t remain = body_.size() - pos_;
+    size_t n = max_bytes;
+    if (n > remain)
+        n = remain;
+
+    r.data.insert(r.data.end(),
+        body_.begin() + static_cast<std::ptrdiff_t>(pos_),
+        body_.begin() + static_cast<std::ptrdiff_t>(pos_ + n));
+    pos_ += n;
+
+    if (pos_ >= body_.size())
+        r.status = READ_EOF;
+    else
+        r.status = READ_OK;
+
+    return r;
+}
+
 }  // namespace server

@@ -2,6 +2,7 @@
 
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
 #include "server/session/fd_session/http_session.hpp"
+#include "server/session/fd_session_controller.hpp"
 #include "utils/log.hpp"
 
 namespace server

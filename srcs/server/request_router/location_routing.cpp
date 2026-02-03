@@ -277,6 +277,18 @@ utils::result::Result<unsigned long> LocationRouting::clientMaxBodySize() const
     return location_->clientMaxBodySize();
 }
 
+bool LocationRouting::tryGetErrorPagePath(
+    const http::HttpStatus& status, std::string* out_path) const
+{
+    if (out_path)
+        out_path->clear();
+    if (location_ && location_->tryGetErrorPagePath(status, out_path))
+        return true;
+    if (virtual_server_)
+        return virtual_server_->tryGetErrorPagePath(status, out_path);
+    return false;
+}
+
 utils::result::Result<utils::path::PhysicalPath>
 LocationRouting::resolvePhysicalPathUnderRootOrError(
     bool allow_nonexistent_leaf) const
@@ -352,7 +364,7 @@ utils::result::Result<void> LocationRouting::decideAction_(
     {
         status_ = http::HttpStatus::NOT_FOUND;
         next_action_ = RESPOND_ERROR;
-        return utils::result::Result<void>();
+        return applyErrorPageOrRespondError_();
     }
 
     if (location_->hasRedirect())
@@ -454,13 +466,8 @@ utils::result::Result<void> LocationRouting::applyErrorPageOrRespondError_()
     next_action_ = RESPOND_ERROR;
     redirect_location_.clear();
 
-    if (!location_)
-    {
-        return utils::result::Result<void>();
-    }
-
     std::string target;
-    if (!location_->tryGetErrorPagePath(status_, &target))
+    if (!tryGetErrorPagePath(status_, &target))
     {
         return utils::result::Result<void>();
     }

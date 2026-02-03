@@ -139,10 +139,22 @@ Result<void> HttpSession::prepareResponseOrCgi_()
         Result<void> sr = startCgi_();
         if (sr.isError())
         {
-            Result<void> er = setSimpleErrorResponse(
-                response_, http::HttpStatus::SERVER_ERROR);
-            if (er.isError())
-                return er;
+            RequestProcessor::Output out;
+            Result<RequestProcessor::Output> per = processor_.processError(
+                request_, http::HttpStatus::SERVER_ERROR, response_);
+            if (per.isOk())
+            {
+                out = per.unwrap();
+            }
+            else
+            {
+                Result<void> er = setSimpleErrorResponse(
+                    response_, http::HttpStatus::SERVER_ERROR);
+                if (er.isError())
+                    return er;
+                out.body_source = NULL;
+                out.should_close_connection = false;
+            }
             response_.setHttpVersion(request_.getHttpVersion());
             if (response_writer_ != NULL)
             {
@@ -154,9 +166,16 @@ Result<void> HttpSession::prepareResponseOrCgi_()
                 delete body_source_;
                 body_source_ = NULL;
             }
+
+            body_source_ = out.body_source;
             http::HttpResponseEncoder::Options opt =
                 makeEncoderOptions(request_);
-            response_writer_ = new HttpResponseWriter(response_, opt, NULL);
+            response_writer_ =
+                new HttpResponseWriter(response_, opt, body_source_);
+
+            connection_close_ =
+                connection_close_ || out.should_close_connection ||
+                !request_.shouldKeepAlive() || handler_.shouldCloseConnection();
             has_response_ = true;
             state_ = SEND_RESPONSE;
             (void)updateSocketWatches_();
@@ -171,12 +190,22 @@ Result<void> HttpSession::prepareResponseOrCgi_()
     if (pr.isError())
     {
         utils::Log::error("RequestProcessor error: ", pr.getErrorMessage());
-        Result<void> er =
-            setSimpleErrorResponse(response_, http::HttpStatus::SERVER_ERROR);
-        if (er.isError())
-            return er;
+        Result<RequestProcessor::Output> per = processor_.processError(
+            request_, http::HttpStatus::SERVER_ERROR, response_);
+        if (per.isOk())
+        {
+            out = per.unwrap();
+        }
+        else
+        {
+            Result<void> er = setSimpleErrorResponse(
+                response_, http::HttpStatus::SERVER_ERROR);
+            if (er.isError())
+                return er;
+            out.body_source = NULL;
+            out.should_close_connection = false;
+        }
         response_.setHttpVersion(request_.getHttpVersion());
-        out.body_source = NULL;
         out.should_close_connection = true;
     }
     else
@@ -229,9 +258,12 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
             http::HttpStatus st = request_.getParseErrorStatus();
             if (st == http::HttpStatus::OK)
                 st = http::HttpStatus::BAD_REQUEST;
-            Result<void> er = setSimpleErrorResponse(response_, st);
-            if (er.isError())
-                return er;
+
+            Result<RequestProcessor::Output> pr =
+                processor_.processError(request_, st, response_);
+            if (pr.isError())
+                return Result<void>(ERROR, pr.getErrorMessage());
+            RequestProcessor::Output out = pr.unwrap();
 
             response_.setHttpVersion(request_.getHttpVersion());
 
@@ -246,9 +278,12 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
                 body_source_ = NULL;
             }
 
+            body_source_ = out.body_source;
+
             http::HttpResponseEncoder::Options opt =
                 makeEncoderOptions(request_);
-            response_writer_ = new HttpResponseWriter(response_, opt, NULL);
+            response_writer_ =
+                new HttpResponseWriter(response_, opt, body_source_);
             has_response_ = true;
             state_ = SEND_RESPONSE;
             (void)updateSocketWatches_();
@@ -458,9 +493,12 @@ Result<void> HttpSession::handleEvent(const FdEvent& event)
                 http::HttpStatus st = request_.getParseErrorStatus();
                 if (st == http::HttpStatus::OK)
                     st = http::HttpStatus::BAD_REQUEST;
-                Result<void> er = setSimpleErrorResponse(response_, st);
-                if (er.isError())
-                    return er;
+
+                Result<RequestProcessor::Output> pr =
+                    processor_.processError(request_, st, response_);
+                if (pr.isError())
+                    return Result<void>(ERROR, pr.getErrorMessage());
+                RequestProcessor::Output out = pr.unwrap();
 
                 // リクエストのHTTPバージョンを反映（できる範囲で）
                 response_.setHttpVersion(request_.getHttpVersion());
@@ -476,9 +514,12 @@ Result<void> HttpSession::handleEvent(const FdEvent& event)
                     body_source_ = NULL;
                 }
 
+                body_source_ = out.body_source;
+
                 http::HttpResponseEncoder::Options opt =
                     makeEncoderOptions(request_);
-                response_writer_ = new HttpResponseWriter(response_, opt, NULL);
+                response_writer_ =
+                    new HttpResponseWriter(response_, opt, body_source_);
                 has_response_ = true;
                 state_ = SEND_RESPONSE;
                 (void)updateSocketWatches_();
@@ -629,10 +670,33 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
     {
         if (redirect_count_ >= kMaxInternalRedirects)
         {
-            Result<void> er = setSimpleErrorResponse(
-                response_, http::HttpStatus::SERVER_ERROR);
-            if (er.isError())
-                return er;
+            // stdout は不要。詰まりを防ぐため閉じる。
+            const int out_fd = cgi.releaseStdoutFd();
+            if (out_fd >= 0)
+                ::close(out_fd);
+
+            if (active_cgi_session_ == &cgi)
+            {
+                controller_.requestDelete(active_cgi_session_);
+                active_cgi_session_ = NULL;
+            }
+
+            RequestProcessor::Output out;
+            Result<RequestProcessor::Output> per = processor_.processError(
+                request_, http::HttpStatus::SERVER_ERROR, response_);
+            if (per.isOk())
+            {
+                out = per.unwrap();
+            }
+            else
+            {
+                Result<void> er = setSimpleErrorResponse(
+                    response_, http::HttpStatus::SERVER_ERROR);
+                if (er.isError())
+                    return er;
+                out.body_source = NULL;
+                out.should_close_connection = false;
+            }
             response_.setHttpVersion(request_.getHttpVersion());
 
             http::HttpResponseEncoder::Options opt =
@@ -641,11 +705,21 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
                 delete response_writer_;
             if (body_source_ != NULL)
                 delete body_source_;
-            response_writer_ = new HttpResponseWriter(response_, opt, NULL);
+            response_writer_ = NULL;
             body_source_ = NULL;
 
+            body_source_ = out.body_source;
+            response_writer_ =
+                new HttpResponseWriter(response_, opt, body_source_);
+
+            connection_close_ =
+                connection_close_ || out.should_close_connection ||
+                !request_.shouldKeepAlive() || handler_.shouldCloseConnection();
+
             waiting_for_cgi_ = false;
+            has_response_ = true;
             state_ = SEND_RESPONSE;
+            (void)updateSocketWatches_();
             return Result<void>();
         }
 
@@ -703,12 +777,22 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
         if (pr.isError())
         {
             utils::Log::error("RequestProcessor error: ", pr.getErrorMessage());
-            Result<void> er = setSimpleErrorResponse(
-                response_, http::HttpStatus::SERVER_ERROR);
-            if (er.isError())
-                return er;
+            Result<RequestProcessor::Output> per = processor_.processError(
+                request_, http::HttpStatus::SERVER_ERROR, response_);
+            if (per.isOk())
+            {
+                out = per.unwrap();
+            }
+            else
+            {
+                Result<void> er = setSimpleErrorResponse(
+                    response_, http::HttpStatus::SERVER_ERROR);
+                if (er.isError())
+                    return er;
+                out.body_source = NULL;
+                out.should_close_connection = false;
+            }
             response_.setHttpVersion(request_.getHttpVersion());
-            out.body_source = NULL;
             out.should_close_connection = true;
         }
         else
@@ -750,8 +834,60 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
     Result<void> ar = cr.applyToHttpResponse(response_);
     if (ar.isError())
     {
-        (void)setSimpleErrorResponse(response_, http::HttpStatus::SERVER_ERROR);
+        // CGIヘッダが壊れている場合は CGI 出力を捨てて 500 を返す。
+        const std::vector<utils::Byte> prefetched = cgi.takePrefetchedBody();
+        (void)prefetched;
+        const int stdout_fd = cgi.releaseStdoutFd();
+        if (stdout_fd >= 0)
+            ::close(stdout_fd);
+
+        if (active_cgi_session_ == &cgi)
+        {
+            controller_.requestDelete(active_cgi_session_);
+            active_cgi_session_ = NULL;
+        }
+
+        RequestProcessor::Output out;
+        Result<RequestProcessor::Output> per = processor_.processError(
+            request_, http::HttpStatus::SERVER_ERROR, response_);
+        if (per.isOk())
+        {
+            out = per.unwrap();
+        }
+        else
+        {
+            (void)setSimpleErrorResponse(
+                response_, http::HttpStatus::SERVER_ERROR);
+            out.body_source = NULL;
+            out.should_close_connection = false;
+        }
         response_.setHttpVersion(request_.getHttpVersion());
+
+        if (body_source_ != NULL)
+        {
+            delete body_source_;
+            body_source_ = NULL;
+        }
+        body_source_ = out.body_source;
+
+        if (response_writer_ != NULL)
+        {
+            delete response_writer_;
+            response_writer_ = NULL;
+        }
+
+        http::HttpResponseEncoder::Options opt = makeEncoderOptions(request_);
+        response_writer_ = new HttpResponseWriter(response_, opt, body_source_);
+
+        connection_close_ = connection_close_ || out.should_close_connection ||
+                            !request_.shouldKeepAlive() ||
+                            handler_.shouldCloseConnection();
+
+        waiting_for_cgi_ = false;
+        has_response_ = true;
+        state_ = SEND_RESPONSE;
+        (void)updateSocketWatches_();
+        return Result<void>();
     }
 
     const std::vector<utils::Byte> prefetched = cgi.takePrefetchedBody();
@@ -786,6 +922,79 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
     // 側では触らない。
     if (active_cgi_session_ == &cgi)
         active_cgi_session_ = NULL;
+    return Result<void>();
+}
+
+Result<void> HttpSession::onCgiError(
+    CgiSession& cgi, const std::string& message)
+{
+    if (is_complete_)
+        return Result<void>();
+
+    // CGI 実行中以外に通知が来た場合は安全に無視する。
+    if (state_ != EXECUTE_CGI)
+        return Result<void>();
+
+    utils::Log::error("CGI error: ", message);
+
+    // CGI の stdout を閉じて詰まり/イベントループを防ぐ。
+    const int stdout_fd = cgi.releaseStdoutFd();
+    if (stdout_fd >= 0)
+        ::close(stdout_fd);
+
+    // CgiSession は controller が所有。ここで削除要求だけ出す。
+    if (active_cgi_session_ == &cgi)
+    {
+        controller_.requestDelete(active_cgi_session_);
+        active_cgi_session_ = NULL;
+    }
+    else
+    {
+        controller_.requestDelete(&cgi);
+    }
+
+    response_.reset();
+    response_.setHttpVersion(request_.getHttpVersion());
+
+    RequestProcessor::Output out;
+    Result<RequestProcessor::Output> per = processor_.processError(
+        request_, http::HttpStatus::SERVER_ERROR, response_);
+    if (per.isOk())
+    {
+        out = per.unwrap();
+    }
+    else
+    {
+        (void)setSimpleErrorResponse(response_, http::HttpStatus::SERVER_ERROR);
+        out.body_source = NULL;
+        out.should_close_connection = false;
+    }
+    response_.setHttpVersion(request_.getHttpVersion());
+
+    if (body_source_ != NULL)
+    {
+        delete body_source_;
+        body_source_ = NULL;
+    }
+    body_source_ = out.body_source;
+
+    if (response_writer_ != NULL)
+    {
+        delete response_writer_;
+        response_writer_ = NULL;
+    }
+
+    http::HttpResponseEncoder::Options opt = makeEncoderOptions(request_);
+    response_writer_ = new HttpResponseWriter(response_, opt, body_source_);
+
+    connection_close_ = connection_close_ || out.should_close_connection ||
+                        !request_.shouldKeepAlive() ||
+                        handler_.shouldCloseConnection();
+
+    waiting_for_cgi_ = false;
+    has_response_ = true;
+    state_ = SEND_RESPONSE;
+    (void)updateSocketWatches_();
     return Result<void>();
 }
 

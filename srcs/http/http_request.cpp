@@ -118,20 +118,20 @@ HttpRequest::Limits::Limits()
 }
 
 HttpRequest::HttpRequest()
-    : method_(HttpMethod::UNKNOWN),
+    : phase_(kRequestLine),
+      parse_error_status_(HttpStatus::OK),
+      cursor_(0),
+      method_(HttpMethod::UNKNOWN),
       method_string_(),
       path_(),
       query_string_(),
       minor_version_(1),
       headers_(),
-      phase_(kRequestLine),
-      parse_error_status_(HttpStatus::OK),
       body_framing_(kNoBody),
+      decoded_body_bytes_(0),
       content_length_remaining_(0),
-      cursor_(0),
       chunk_phase_(kChunkSizeLine),
       chunk_bytes_remaining_(0),
-      decoded_body_bytes_(0),
       should_keep_alive_(true),
       limits_(),
       header_bytes_parsed_(0),
@@ -140,20 +140,21 @@ HttpRequest::HttpRequest()
 }
 
 HttpRequest::HttpRequest(const HttpRequest& rhs)
-    : method_(rhs.method_),
+    : phase_(rhs.phase_),
+      parse_error_status_(rhs.parse_error_status_),
+      cursor_(rhs.cursor_),
+      method_(rhs.method_),
       method_string_(rhs.method_string_),
       path_(rhs.path_),
       query_string_(rhs.query_string_),
       minor_version_(rhs.minor_version_),
       headers_(rhs.headers_),
-      phase_(rhs.phase_),
-      parse_error_status_(rhs.parse_error_status_),
       body_framing_(rhs.body_framing_),
+      decoded_body_bytes_(rhs.decoded_body_bytes_),
       content_length_remaining_(rhs.content_length_remaining_),
-      cursor_(rhs.cursor_),
       chunk_phase_(rhs.chunk_phase_),
       chunk_bytes_remaining_(rhs.chunk_bytes_remaining_),
-      decoded_body_bytes_(rhs.decoded_body_bytes_),
+      should_keep_alive_(rhs.should_keep_alive_),
       limits_(rhs.limits_),
       header_bytes_parsed_(rhs.header_bytes_parsed_),
       header_count_(rhs.header_count_)
@@ -178,6 +179,7 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& rhs)
         chunk_phase_ = rhs.chunk_phase_;
         chunk_bytes_remaining_ = rhs.chunk_bytes_remaining_;
         decoded_body_bytes_ = rhs.decoded_body_bytes_;
+        should_keep_alive_ = rhs.should_keep_alive_;
 
         limits_ = rhs.limits_;
         header_bytes_parsed_ = rhs.header_bytes_parsed_;

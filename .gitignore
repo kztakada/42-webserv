@@ -1,4 +1,5 @@
 objs
+objs_test
 *.o
 
 google_test

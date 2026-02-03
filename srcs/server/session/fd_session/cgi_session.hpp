@@ -56,6 +56,8 @@ class CgiSession : public FdSession
     bool input_complete_;
     bool headers_complete_;
 
+    bool error_notified_to_parent_;
+
     // ヘッダ終端と同じ read() で先読みしてしまった body の断片
     std::vector<utils::Byte> prefetched_body_;
 
@@ -78,6 +80,7 @@ class CgiSession : public FdSession
           is_stderr_eof_(false),
           input_complete_(false),
           headers_complete_(false),
+          error_notified_to_parent_(false),
           prefetched_body_()
     {
         updateLastActiveTime();

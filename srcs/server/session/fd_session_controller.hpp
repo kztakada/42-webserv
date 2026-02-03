@@ -14,7 +14,13 @@ class FdSessionController
 {
    public:
     FdSessionController();
+    explicit FdSessionController(FdEventReactor* reactor, bool owns_reactor);
     ~FdSessionController();
+
+    // 次にタイムアウトが発生し得るまでの待ち時間(ms)を返す。
+    // - 0: 直ちにtimeoutチェックを走らせたい
+    // - -1: timeoutが存在しない（無期限待ち）
+    int getNextTimeoutMs() const;
 
     // --- Session ライフサイクル ---
     // 所有権を引き取り、必要な fd watch を登録する。
@@ -60,6 +66,7 @@ class FdSessionController
     };
 
     FdEventReactor* reactor_;
+    bool owns_reactor_;
     std::set<FdSession*> active_sessions_;     // 所有している生存 Session
     std::set<FdSession*> deleting_sessions_;   // delete予定（dispatch中）
     std::vector<FdSession*> deferred_delete_;  // バッチ末尾delete

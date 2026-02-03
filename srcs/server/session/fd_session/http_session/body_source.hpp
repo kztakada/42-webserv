@@ -1,6 +1,7 @@
 #ifndef WEBSERV_BODY_SOURCE_HPP_
 #define WEBSERV_BODY_SOURCE_HPP_
 
+#include <string>
 #include <vector>
 
 #include "utils/byte.hpp"
@@ -89,6 +90,25 @@ class PrefetchedFdBodySource : public BodySource
     PrefetchedFdBodySource();
     PrefetchedFdBodySource(const PrefetchedFdBodySource& rhs);
     PrefetchedFdBodySource& operator=(const PrefetchedFdBodySource& rhs);
+};
+
+// 文字列（メモリ）から body を供給する。
+// error page など、ファイルを用意せずに返したい小さめのレスポンスで使用。
+class StringBodySource : public BodySource
+{
+   public:
+    explicit StringBodySource(const std::string& body);
+    virtual ~StringBodySource();
+
+    virtual Result<ReadResult> read(size_t max_bytes);
+
+   private:
+    std::vector<utils::Byte> body_;
+    size_t pos_;
+
+    StringBodySource();
+    StringBodySource(const StringBodySource& rhs);
+    StringBodySource& operator=(const StringBodySource& rhs);
 };
 
 }  // namespace server

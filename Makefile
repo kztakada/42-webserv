@@ -7,12 +7,18 @@ OBJS_DIR = objs
 OBJS := $(SRCS:%.cpp=$(OBJS_DIR)/%.o)
 DEPENDENCIES := $(OBJS:.o=.d)
 
+TEST_OBJS_DIR = objs_test
+
 CXXFLAGS := -I$(SRCS_DIR) --std=c++98 -Wall -Wextra -Werror -pedantic
 
 
 all: $(NAME)
 
 $(OBJS_DIR)/%.o: %.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -c $< -MMD -MP -o $@
+
+$(TEST_OBJS_DIR)/%.o: %.cpp
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c $< -MMD -MP -o $@
 
@@ -52,12 +58,26 @@ TEST_PROD_SRCS ?= \
 	srcs/network/ip_address.cpp \
 	srcs/network/port_type.cpp \
 	srcs/utils/path.cpp \
+	srcs/utils/log.cpp \
 	srcs/http/http_request.cpp \
+	srcs/http/cgi_response.cpp \
+	srcs/http/cgi_meta_variables.cpp \
+	srcs/http/http_response.cpp \
+		srcs/http/http_response_encoder.cpp \
 	srcs/http/syntax.cpp \
+	srcs/server/session/io_buffer.cpp \
+	srcs/server/session/fd_session_controller.cpp \
 	srcs/server/session/fd/cgi_pipe/cgi_pipe_fd.cpp \
 	srcs/server/session/fd/tcp_socket/socket_address.cpp \
 	srcs/server/session/fd/tcp_socket/tcp_connection_socket_fd.cpp \
 	srcs/server/session/fd/tcp_socket/tcp_listen_socket_fd.cpp \
+		srcs/server/session/fd_session/http_session/body_source.cpp \
+		srcs/server/session/fd_session/http_session.cpp \
+	srcs/server/session/fd_session/cgi_session.cpp \
+		srcs/server/session/fd_session/http_session/http_response_writer.cpp \
+	srcs/server/session/fd_session/http_session/body_store.cpp \
+	srcs/server/session/fd_session/http_session/http_handler.cpp \
+	srcs/server/request_processor/request_processor.cpp \
 	srcs/server/request_router/location_directive.cpp \
 	srcs/server/request_router/location_routing.cpp \
 	srcs/server/request_router/resolved_request_context.cpp \
@@ -71,8 +91,8 @@ TEST_PROD_SRCS ?= \
 	srcs/server/reactor/fd_event_reactor/epoll_reactor.cpp \
 	srcs/server/reactor/fd_event_reactor/select_reactor.cpp \
 	srcs/server/reactor/fd_event_reactor_factory.cpp
-TEST_PROD_OBJS := $(TEST_PROD_SRCS:%.cpp=$(OBJS_DIR)/%.o)
-TEST_OBJS      := $(TEST_PROD_OBJS) $(TEST_SRCS:%.cpp=$(OBJS_DIR)/%.o)
+TEST_PROD_OBJS := $(TEST_PROD_SRCS:%.cpp=$(TEST_OBJS_DIR)/%.o)
+TEST_OBJS      := $(TEST_PROD_OBJS) $(TEST_SRCS:%.cpp=$(TEST_OBJS_DIR)/%.o)
 TEST_DEPENDENCIES \
          := $(TEST_OBJS:%.o=%.d)
 
@@ -102,7 +122,7 @@ $(GTEST_STAMP):
 clean_test:
 	$(RM) $(TEST_OBJS) $(TEST_DEPENDENCIES)
 	$(RM) $(TESTER_NAME)
-	$(RM) -rf $(OBJS_DIR)
+	$(RM) -rf $(TEST_OBJS_DIR)
 	$(RM) -rf ./-h
 	$(RM) -rf $(GTEST_DIR)
 

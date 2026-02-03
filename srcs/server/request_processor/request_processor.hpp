@@ -34,6 +34,14 @@ class RequestProcessor
     Result<Output> process(
         const http::HttpRequest& request, http::HttpResponse& out_response);
 
+    // パースエラー等で「明示的にエラーステータスが決まっている」場合に
+    // error_page を適用してレスポンス（body含む）を生成する。
+    // - error_page が内部URIの場合は、そのURIの静的コンテンツを返しつつ
+    //   ステータスは error_status のままにする。
+    // - 適用できない場合はデフォルトHTMLエラーページにフォールバック。
+    Result<Output> processError(const http::HttpRequest& request,
+        const http::HttpStatus& error_status, http::HttpResponse& out_response);
+
    private:
     const RequestRouter& router_;
     IPAddress server_ip_;

@@ -29,7 +29,14 @@ Result<LocationRouting> RequestRouter::route(const http::HttpRequest& request,
         ResolvedRequestContext::create(request);
     if (ctx.isError())
     {
-        return LocationRouting(NULL, NULL,
+        const VirtualServer* vserver =
+            selectVirtualServer(server_ip, server_port, std::string());
+        if (!vserver)
+        {
+            return Result<LocationRouting>(utils::result::ERROR,
+                "no virtual server for given listen endpoint");
+        }
+        return LocationRouting(vserver, NULL,
             ResolvedRequestContext::createForBadRequest(request), request,
             HttpStatus::BAD_REQUEST);
     }
@@ -38,8 +45,15 @@ Result<LocationRouting> RequestRouter::route(const http::HttpRequest& request,
     Result<void> normalized = resolved.resolveDotSegmentsOrError();
     if (normalized.isError())
     {
+        const VirtualServer* vserver =
+            selectVirtualServer(server_ip, server_port, resolved.getHost());
+        if (!vserver)
+        {
+            return Result<LocationRouting>(utils::result::ERROR,
+                "no virtual server for given listen endpoint");
+        }
         return LocationRouting(
-            NULL, NULL, resolved, request, HttpStatus::BAD_REQUEST);
+            vserver, NULL, resolved, request, HttpStatus::BAD_REQUEST);
     }
 
     const VirtualServer* vserver =

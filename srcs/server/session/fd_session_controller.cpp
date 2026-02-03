@@ -7,6 +7,7 @@ namespace server
 
 FdSessionController::FdSessionController()
     : reactor_(FdEventReactorFactory::create()),
+      owns_reactor_(true),
       active_sessions_(),
       deleting_sessions_(),
       deferred_delete_(),
@@ -15,14 +16,77 @@ FdSessionController::FdSessionController()
 {
 }
 
+FdSessionController::FdSessionController(
+    FdEventReactor* reactor, bool owns_reactor)
+    : reactor_(reactor),
+      owns_reactor_(owns_reactor),
+      active_sessions_(),
+      deleting_sessions_(),
+      deferred_delete_(),
+      fd_watch_state_(),
+      session_fds_()
+{
+    if (reactor_ == NULL)
+    {
+        reactor_ = FdEventReactorFactory::create();
+        owns_reactor_ = true;
+    }
+}
+
 FdSessionController::~FdSessionController()
 {
     clearAllSessions();
-    if (reactor_ != NULL)
+    if (reactor_ != NULL && owns_reactor_)
     {
         delete reactor_;
         reactor_ = NULL;
     }
+}
+
+int FdSessionController::getNextTimeoutMs() const
+{
+    // time(NULL) ベース（秒精度）で十分。handleTimeouts()も同じ精度。
+    // 最短の残り秒を探し、そのmsを返す。
+    // timeout_seconds_ が 0 以下のものは「timeout無し」とみなす。
+    time_t now = time(NULL);
+
+    bool found = false;
+    long min_remaining_sec = 0;
+
+    for (std::set<FdSession*>::const_iterator it = active_sessions_.begin();
+        it != active_sessions_.end(); ++it)
+    {
+        FdSession* s = *it;
+        if (s == NULL)
+            continue;
+
+        const int timeout_sec = s->getTimeoutSeconds();
+        if (timeout_sec <= 0)
+            continue;
+
+        const long elapsed = static_cast<long>(now - s->getLastActiveTime());
+        long remaining = static_cast<long>(timeout_sec) - elapsed;
+        if (remaining <= 0)
+        {
+            return 0;
+        }
+
+        if (!found || remaining < min_remaining_sec)
+        {
+            found = true;
+            min_remaining_sec = remaining;
+        }
+    }
+
+    if (!found)
+    {
+        return -1;
+    }
+
+    const long ms = min_remaining_sec * 1000L;
+    if (ms > 2147483647L)
+        return 2147483647;
+    return static_cast<int>(ms);
 }
 
 Result<void> FdSessionController::delegateSession(FdSession* session)

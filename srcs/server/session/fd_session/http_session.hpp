@@ -119,6 +119,9 @@ class HttpSession : public FdSession
     // CgiSession からの通知: CGI stdout のヘッダが確定した
     Result<void> onCgiHeadersReady(CgiSession& cgi);
 
+    // CgiSession からの通知: CGI がヘッダ確定前に失敗した
+    Result<void> onCgiError(CgiSession& cgi, const std::string& message);
+
     bool isWaitingForCgi() const;
     void setWaitingForCgi(bool waiting);
 

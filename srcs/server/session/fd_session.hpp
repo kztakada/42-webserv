@@ -50,6 +50,8 @@ class FdSession
 
     // タイムアウト管理
     void updateLastActiveTime() { last_active_time_ = time(NULL); }
+    time_t getLastActiveTime() const { return last_active_time_; }
+    int getTimeoutSeconds() const { return timeout_seconds_; }
     virtual bool isTimedOut() const
     {
         time_t current_time = time(NULL);

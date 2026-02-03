@@ -76,6 +76,13 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
     if (event.type == kTimeoutEvent || event.type == kErrorEvent)
     {
         // 親側は CGI エラーとして扱う想定
+        if (!headers_complete_ && parent_session_ != NULL &&
+            !error_notified_to_parent_)
+        {
+            error_notified_to_parent_ = true;
+            (void)parent_session_->onCgiError(
+                *this, "cgi session error/timeout");
+        }
         controller_.requestDelete(this);
         return Result<void>(ERROR, "cgi session error/timeout");
     }
@@ -89,6 +96,18 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
         r = handleStderr_(event.type);
     else
         r = Result<void>(ERROR, "Unknown FD in CgiSession");
+
+    if (r.isError())
+    {
+        if (!headers_complete_ && parent_session_ != NULL &&
+            !error_notified_to_parent_)
+        {
+            error_notified_to_parent_ = true;
+            (void)parent_session_->onCgiError(*this, r.getErrorMessage());
+        }
+        controller_.requestDelete(this);
+        return r;
+    }
 
     if (isComplete())
         controller_.requestDelete(this);

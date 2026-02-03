@@ -1,6 +1,7 @@
 #ifndef WEBSERV_SERVER_HPP_
 #define WEBSERV_SERVER_HPP_
 
+#include <csignal>
 #include <vector>
 
 #include "http/status.hpp"
@@ -8,6 +9,7 @@
 #include "server/reactor/fd_event_reactor.hpp"
 #include "server/request_router/request_router.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "utils/result.hpp"
 
 namespace server
 {
@@ -43,13 +45,14 @@ class Server
     RequestRouter* router_;
 
     // 設定オブジェクト
-    const ServerConfig& config_;
+    ServerConfig config_;
 
     // シグナル処理
     static Server* running_instance_;  // 現在実行中のインスタンス
     volatile sig_atomic_t should_stop_;
     static void signalHandler(int signum)
     {
+        (void)signum;
         if (running_instance_)
             running_instance_->should_stop_ = true;
     }
@@ -59,14 +62,6 @@ class Server
     Server& operator=(const Server&);
 
     bool is_running_;
-
-    // for init
-    Result<void> registerListenSockets(
-        FdEventReactor& fd_event_reactor_, const ServerConfig& config);
-
-    // 内部ヘルパー
-    void initializeComponents();
-    void cleanupComponents();
 };
 }  // namespace server
 

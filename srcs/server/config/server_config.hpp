@@ -16,6 +16,7 @@ struct ServerConfig
 
     ServerConfig() : servers() {}
     utils::result::Result<void> appendServer(const VirtualServerConf& server);
+    std::vector<Listen> getListens() const;
     bool isValid() const;
 };
 

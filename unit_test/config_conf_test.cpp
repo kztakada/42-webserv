@@ -319,3 +319,51 @@ TEST(ServerConfig, IsValidRequiresAtLeastOneValidServer)
     EXPECT_TRUE(conf.appendServer(v).isOk());
     EXPECT_TRUE(conf.isValid());
 }
+
+TEST(ServerConfig, GetListensDeduplicatesAcrossServers)
+{
+    server::ServerConfig conf;
+
+    server::VirtualServerConf a;
+    EXPECT_TRUE(a.appendListen("", "8080").isOk());  // wildcard 8080
+    EXPECT_TRUE(a.appendListen("127.0.0.1", "8081").isOk());
+    EXPECT_TRUE(a.setRootDir("/var/www").isOk());
+    EXPECT_TRUE(a.appendLocation(server::LocationDirectiveConf()).isOk());
+    EXPECT_TRUE(conf.appendServer(a).isOk());
+
+    server::VirtualServerConf b;
+    EXPECT_TRUE(
+        b.appendListen("127.0.0.1", "8080").isOk());  // should be dropped
+    EXPECT_TRUE(b.appendListen("127.0.0.1", "8081")
+            .isOk());  // duplicate, should be dropped
+    EXPECT_TRUE(b.appendListen("192.168.0.10", "8081").isOk());
+    EXPECT_TRUE(b.setRootDir("/var/www2").isOk());
+    EXPECT_TRUE(b.appendLocation(server::LocationDirectiveConf()).isOk());
+    EXPECT_TRUE(conf.appendServer(b).isOk());
+
+    std::vector<server::Listen> listens = conf.getListens();
+
+    bool has_wild_8080 = false;
+    bool has_127_8080 = false;
+    bool has_127_8081 = false;
+    bool has_192_8081 = false;
+
+    for (size_t i = 0; i < listens.size(); ++i)
+    {
+        const std::string ip = listens[i].host_ip.toString();
+        const std::string port = listens[i].port.toString();
+        if (port == "8080" && ip == "0.0.0.0")
+            has_wild_8080 = true;
+        if (port == "8080" && ip == "127.0.0.1")
+            has_127_8080 = true;
+        if (port == "8081" && ip == "127.0.0.1")
+            has_127_8081 = true;
+        if (port == "8081" && ip == "192.168.0.10")
+            has_192_8081 = true;
+    }
+
+    EXPECT_TRUE(has_wild_8080);
+    EXPECT_FALSE(has_127_8080);
+    EXPECT_TRUE(has_127_8081);
+    EXPECT_TRUE(has_192_8081);
+}

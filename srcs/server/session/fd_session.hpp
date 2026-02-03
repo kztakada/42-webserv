@@ -4,7 +4,6 @@
 #include <ctime>
 
 #include "server/reactor/fd_event.hpp"
-#include "server/session/fd_session_controller.hpp"
 #include "utils/result.hpp"
 
 // セッションとは、
@@ -14,6 +13,8 @@
 namespace server
 {
 using namespace utils::result;
+
+class FdSessionController;
 
 // セッションの基底抽象クラス
 class FdSession
@@ -27,9 +28,9 @@ class FdSession
 
    public:
     explicit FdSession(FdSessionController& controller, int timeout_seconds)
-        : controller_(controller),
-          last_active_time_(time(NULL)),
-          timeout_seconds_(timeout_seconds) {};
+        : last_active_time_(time(NULL)),
+          timeout_seconds_(timeout_seconds),
+          controller_(controller) {};
     virtual ~FdSession() {};
 
     // タイムアウト管理

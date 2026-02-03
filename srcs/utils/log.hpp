@@ -203,8 +203,6 @@ class Log
     }
 };
 
-std::string Log::error_file_path_ = "./error.txt";
-
 }  // namespace utils
 
 #endif

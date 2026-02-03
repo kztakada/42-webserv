@@ -29,6 +29,7 @@ class HttpSession : public FdSession
 {
    public:
     static const long kDefaultTimeoutSec = 5;
+    static const int kMaxInternalRedirects = 5;
 
     // テスト用
     const HttpRequest& request() const { return request_; }
@@ -106,6 +107,9 @@ class HttpSession : public FdSession
     virtual Result<void> handleEvent(const FdEvent& event);
     virtual bool isComplete() const;
 
+    // CgiSession からの通知: CGI stdout のヘッダが確定した
+    Result<void> onCgiHeadersReady(CgiSession& cgi);
+
     bool isWaitingForCgi() const;
     void setWaitingForCgi(bool waiting);
 
@@ -116,6 +120,10 @@ class HttpSession : public FdSession
     HttpSession();
     HttpSession(const HttpSession& rhs);
     HttpSession& operator=(const HttpSession& rhs);
+
+    Result<void> startCgi_();
+    Result<http::HttpRequest> buildInternalRedirectRequest_(
+        const std::string& uri_path) const;
 };
 
 }  // namespace server

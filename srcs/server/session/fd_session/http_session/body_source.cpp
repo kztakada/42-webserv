@@ -2,8 +2,7 @@
 
 #include <unistd.h>
 
-#include <cerrno>
-#include <cstring>
+#include <cstddef>
 
 namespace server
 {
@@ -15,7 +14,14 @@ FileBodySource::FileBodySource(int fd, unsigned long remaining_bytes)
 {
 }
 
-FileBodySource::~FileBodySource() {}
+FileBodySource::~FileBodySource()
+{
+    if (fd_ >= 0)
+    {
+        ::close(fd_);
+        fd_ = -1;
+    }
+}
 
 Result<BodySource::ReadResult> FileBodySource::read(size_t max_bytes)
 {
@@ -47,12 +53,10 @@ Result<BodySource::ReadResult> FileBodySource::read(size_t max_bytes)
     if (n < 0)
     {
         r.data.clear();
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-            r.status = READ_WOULD_BLOCK;
-            return r;
-        }
-        return Result<ReadResult>(ERROR, std::strerror(errno));
+        // 実装規定: read/write 後の errno 分岐は禁止。
+        // -1 は "今は読めない" として扱い、致命エラーは reactor 側で検出する。
+        r.status = READ_WOULD_BLOCK;
+        return r;
     }
 
     if (n == 0)
@@ -77,7 +81,14 @@ Result<BodySource::ReadResult> FileBodySource::read(size_t max_bytes)
 
 CgiBodySource::CgiBodySource(int fd) : fd_(fd) {}
 
-CgiBodySource::~CgiBodySource() {}
+CgiBodySource::~CgiBodySource()
+{
+    if (fd_ >= 0)
+    {
+        ::close(fd_);
+        fd_ = -1;
+    }
+}
 
 Result<BodySource::ReadResult> CgiBodySource::read(size_t max_bytes)
 {
@@ -95,12 +106,75 @@ Result<BodySource::ReadResult> CgiBodySource::read(size_t max_bytes)
     if (n < 0)
     {
         r.data.clear();
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-        {
-            r.status = READ_WOULD_BLOCK;
-            return r;
-        }
-        return Result<ReadResult>(ERROR, std::strerror(errno));
+        // 実装規定: read/write 後の errno 分岐は禁止。
+        r.status = READ_WOULD_BLOCK;
+        return r;
+    }
+
+    if (n == 0)
+    {
+        r.data.clear();
+        r.status = READ_EOF;
+        return r;
+    }
+
+    r.data.resize(static_cast<size_t>(n));
+    r.status = READ_OK;
+    return r;
+}
+
+PrefetchedFdBodySource::PrefetchedFdBodySource(
+    int fd, const std::vector<utils::Byte>& prefetched)
+    : fd_(fd), prefetched_(prefetched), prefetched_pos_(0)
+{
+}
+
+PrefetchedFdBodySource::~PrefetchedFdBodySource()
+{
+    if (fd_ >= 0)
+    {
+        ::close(fd_);
+        fd_ = -1;
+    }
+}
+
+Result<BodySource::ReadResult> PrefetchedFdBodySource::read(size_t max_bytes)
+{
+    ReadResult r;
+
+    if (max_bytes == 0)
+    {
+        r.status = READ_OK;
+        return r;
+    }
+
+    // 先読み分が残っていれば優先
+    if (prefetched_pos_ < prefetched_.size())
+    {
+        size_t remain = prefetched_.size() - prefetched_pos_;
+        size_t n = max_bytes;
+        if (n > remain)
+            n = remain;
+
+        r.data.insert(r.data.end(),
+            prefetched_.begin() + static_cast<std::ptrdiff_t>(prefetched_pos_),
+            prefetched_.begin() +
+                static_cast<std::ptrdiff_t>(prefetched_pos_ + n));
+        prefetched_pos_ += n;
+
+        r.status = READ_OK;
+        return r;
+    }
+
+    // 以降は fd から読む
+    r.data.resize(max_bytes);
+    const ssize_t n = ::read(fd_, &r.data[0], max_bytes);
+
+    if (n < 0)
+    {
+        r.data.clear();
+        r.status = READ_WOULD_BLOCK;
+        return r;
     }
 
     if (n == 0)

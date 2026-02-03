@@ -95,7 +95,10 @@ Result<void> HttpHandler::onRequestReady()
             return routing_result;
     }
 
-    next_step_ = SEND_RESPONSE;
+    if (location_routing_.getNextAction() == RUN_CGI)
+        next_step_ = EXECUTE_CGI;
+    else
+        next_step_ = SEND_RESPONSE;
     return Result<void>();
 }
 

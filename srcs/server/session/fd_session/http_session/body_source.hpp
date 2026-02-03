@@ -70,6 +70,27 @@ class CgiBodySource : public BodySource
     CgiBodySource& operator=(const CgiBodySource& rhs);
 };
 
+// 先読みデータ（prefetched）を優先して返し、その後に fd から読み続ける。
+// CGI stdout のヘッダ終端検出で発生する「余剰 body bytes」を失わずに
+// HttpResponseWriter へ渡す用途を想定。
+class PrefetchedFdBodySource : public BodySource
+{
+   public:
+    PrefetchedFdBodySource(int fd, const std::vector<utils::Byte>& prefetched);
+    virtual ~PrefetchedFdBodySource();
+
+    virtual Result<ReadResult> read(size_t max_bytes);
+
+   private:
+    int fd_;
+    std::vector<utils::Byte> prefetched_;
+    size_t prefetched_pos_;
+
+    PrefetchedFdBodySource();
+    PrefetchedFdBodySource(const PrefetchedFdBodySource& rhs);
+    PrefetchedFdBodySource& operator=(const PrefetchedFdBodySource& rhs);
+};
+
 }  // namespace server
 
 #endif

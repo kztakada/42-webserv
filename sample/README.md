@@ -10,6 +10,7 @@ webserv の手動動作確認（`curl`）用のサンプル設定と素材置き
 - `01_static/`: 静的ファイル配信（200 + body）
 - `02_error_page/`: error_page（400/403/404/405/413/500）のカスタムHTML
 - `03_autoindex/`: autoindex（ディレクトリ一覧HTML）
+- `04_cgi/`: CGI（python/php/node/bash）
 
 ## smoke test
 

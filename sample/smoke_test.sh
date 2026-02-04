@@ -8,6 +8,23 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required for CGI sample" >&2
+  exit 1
+fi
+if ! command -v php >/dev/null 2>&1; then
+  echo "php is required for CGI sample" >&2
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required for CGI sample" >&2
+  exit 1
+fi
+if ! command -v bash >/dev/null 2>&1; then
+  echo "bash is required for CGI sample" >&2
+  exit 1
+fi
+
 run_sample() {
   local config="$1"; shift
   local log="/tmp/webserv_sample_$$.log"
@@ -91,6 +108,96 @@ run_sample sample/03_autoindex/webserv.conf bash -lc '
   echo "$r" | grep -q "Index of /dir/"
   echo "$r" | grep -q "a.txt"
   echo "$r" | grep -q "sub/"
+'
+
+# --- 04_cgi ---
+run_sample sample/04_cgi/webserv.conf bash -lc '
+  set -e
+
+  # python
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.py?lang=py")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -qi "^Content-Type: text/plain"
+  echo "$r" | grep -q "python ok"
+  echo "$r" | grep -q "query=lang=py"
+
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/hello.py" --data "abc")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body=abc"
+
+  # php
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.php?lang=php")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -qi "^Content-Type: text/plain"
+  echo "$r" | grep -q "php ok"
+  echo "$r" | grep -q "query=lang=php"
+
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/hello.php" --data "def")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body=def"
+
+  # node
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.js?lang=node")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -qi "^Content-Type: text/plain"
+  echo "$r" | grep -q "node ok"
+  echo "$r" | grep -q "query=lang=node"
+
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/hello.js" --data "ghi")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body=ghi"
+
+  # bash
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.sh?lang=bash")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -qi "^Content-Type: text/plain"
+  echo "$r" | grep -q "bash ok"
+  echo "$r" | grep -q "query=lang=bash"
+
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/hello.sh" --data "jkl")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body=jkl"
+
+  # locationごとの CGI 対象分離
+  # /cgi_py は .py のみ CGI として動く
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_py/hello.py?only=py")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "python ok"
+  echo "$r" | grep -q "query=only=py"
+
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_py/hello.php")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "<?php"
+
+  # /cgi_php は .php のみ CGI として動く
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_php/hello.php?only=php")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "php ok"
+  echo "$r" | grep -q "query=only=php"
+
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_php/hello.py")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "#!/usr/bin/python3"
+
+  # /cgi_node は .js のみ CGI として動く
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_node/hello.js?only=node")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "node ok"
+  echo "$r" | grep -q "query=only=node"
+
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_node/hello.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "#!/usr/bin/bash"
+
+  # /cgi_bash は .sh のみ CGI として動く
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_bash/hello.sh?only=bash")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "bash ok"
+  echo "$r" | grep -q "query=only=bash"
+
+  r=$(curl -sS -i "http://127.0.0.1:18084/cgi_bash/hello.js")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "const fs"
 '
 
 echo "All sample smoke checks passed."

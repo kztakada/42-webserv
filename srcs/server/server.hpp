@@ -28,16 +28,15 @@ class Server
     // サーバーのライフサイクル管理
     void start();
     void stop();
-    void restart();
     bool isRunning() const { return should_stop_ == false; }
-
-    // 設定の動的更新
-    void reloadConfig(const ServerConfig& config);
 
    private:
     // for init
     explicit Server(const ServerConfig& config);  // コンストラクタはprivate
     Result<void> initialize();  // 初期化もprivate（Factoryから呼ばれる）
+
+    // accept()されるまで待ち状態にしておける接続要求のキュー（保留）の上限
+    static const int kListenBacklog = 128;
 
     // コンポーネント
     FdEventReactor* reactor_;

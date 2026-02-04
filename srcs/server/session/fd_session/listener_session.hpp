@@ -11,14 +11,14 @@ namespace server
 {
 using namespace utils::result;
 
-const int kInfiniteTimeout = 99999999;
+const int kNoTimeoutSeconds = 0;
 
 // リスナーセッション：新規接続を受け付ける
 class ListenerSession : public FdSession
 {
    private:
     // --- ファイル記述子 (RAIIオブジェクト) ---
-    TcpListenSocketFd listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
+    TcpListenSocketFd* listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
 
     // --- 制御と外部連携 ---
     const RequestRouter& router_;  // Serverから渡される参照、HttpSession生成用
@@ -26,10 +26,9 @@ class ListenerSession : public FdSession
     void acceptNewConnection();
 
    public:
-    explicit ListenerSession(int fd, const SocketAddress& listen_addr,
+    explicit ListenerSession(TcpListenSocketFd* listen_fd,
         FdSessionController& controller, const RequestRouter& router);
-    virtual ~ListenerSession();  // listen_fd_ のデストラクタで自動的に close
-                                 // される
+    virtual ~ListenerSession();
 
     virtual bool isTimedOut() const;  // リスナーセッションはタイムアウトしない
 

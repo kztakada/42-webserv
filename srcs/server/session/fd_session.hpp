@@ -54,6 +54,8 @@ class FdSession
     int getTimeoutSeconds() const { return timeout_seconds_; }
     virtual bool isTimedOut() const
     {
+        if (timeout_seconds_ <= 0)
+            return false;
         time_t current_time = time(NULL);
         return (current_time - last_active_time_) > timeout_seconds_;
     }

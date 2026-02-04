@@ -21,6 +21,10 @@ class TcpListenSocketFd : public FdBase
     TcpListenSocketFd(int fd, const SocketAddress& listen_addr);
     virtual ~TcpListenSocketFd();
 
+    // bind()/listen() 済みのノンブロッキング待受けソケットを作る
+    static Result<TcpListenSocketFd*> listenOn(
+        const IPAddress& host_ip, const PortType& port, int backlog);
+
     // 接続要求を受け付ける
     Result<TcpConnectionSocketFd*> accept();
 

@@ -7,6 +7,8 @@
 
 #include "utils/result.hpp"
 
+using namespace utils::result;
+
 // getaddrinfo()などの標準ライブラリのインターフェースに合わせている｡
 // サービス名("http")などは受け付けず､数値での指定のみ
 class PortType
@@ -16,11 +18,10 @@ class PortType
     PortType(const sockaddr_in& addr);
 
     // サービス名("http")などは受け付けず､数値での指定のみ
-    static utils::result::Result<PortType> parseNumeric(
-        const std::string& port_str);
+    static Result<PortType> parseNumeric(const std::string& port_str);
 
+    unsigned int toNumber() const;
     const std::string& toString() const;
-
     bool empty() const;
 
    private:

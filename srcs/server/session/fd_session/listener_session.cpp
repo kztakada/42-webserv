@@ -8,16 +8,23 @@
 namespace server
 {
 
-ListenerSession::ListenerSession(int fd, const SocketAddress& listen_addr,
+ListenerSession::ListenerSession(TcpListenSocketFd* listen_fd,
     FdSessionController& controller, const RequestRouter& router)
-    : FdSession(controller, kInfiniteTimeout),
-      listen_fd_(fd, listen_addr),
+    : FdSession(controller, kNoTimeoutSeconds),
+      listen_fd_(listen_fd),
       router_(router)
 {
     updateLastActiveTime();
 }
 
-ListenerSession::~ListenerSession() {}
+ListenerSession::~ListenerSession()
+{
+    if (listen_fd_ != NULL)
+    {
+        delete listen_fd_;
+        listen_fd_ = NULL;
+    }
+}
 
 bool ListenerSession::isTimedOut() const { return false; }
 
@@ -28,7 +35,9 @@ void ListenerSession::getInitialWatchSpecs(
 {
     if (out == NULL)
         return;
-    out->push_back(FdSession::FdWatchSpec(listen_fd_.getFd(), true, false));
+    if (listen_fd_ == NULL)
+        return;
+    out->push_back(FdSession::FdWatchSpec(listen_fd_->getFd(), true, false));
 }
 
 Result<void> ListenerSession::handleEvent(const FdEvent& event)
@@ -43,9 +52,11 @@ Result<void> ListenerSession::handleEvent(const FdEvent& event)
 
 void ListenerSession::acceptNewConnection()
 {
+    if (listen_fd_ == NULL)
+        return;
     for (;;)
     {
-        Result<TcpConnectionSocketFd*> accept_result = listen_fd_.accept();
+        Result<TcpConnectionSocketFd*> accept_result = listen_fd_->accept();
         if (accept_result.isError())
         {
             utils::Log::error("ListenerSession accept() failed: ",

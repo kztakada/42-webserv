@@ -67,9 +67,7 @@ int FdSessionController::getNextTimeoutMs() const
         const long elapsed = static_cast<long>(now - s->getLastActiveTime());
         long remaining = static_cast<long>(timeout_sec) - elapsed;
         if (remaining <= 0)
-        {
             return 0;
-        }
 
         if (!found || remaining < min_remaining_sec)
         {
@@ -79,9 +77,7 @@ int FdSessionController::getNextTimeoutMs() const
     }
 
     if (!found)
-    {
         return -1;
-    }
 
     const long ms = min_remaining_sec * 1000L;
     if (ms > 2147483647L)

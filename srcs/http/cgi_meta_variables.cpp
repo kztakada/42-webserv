@@ -187,11 +187,16 @@ CgiMetaVariables CgiMetaVariables::fromHttpRequest(const HttpRequest& request,
         const std::vector<std::string>& values = it->second;
         if (values.empty())
             continue;
-        // 複数値はカンマ結合（簡易）
+        // 複数値の結合
+        // - Cookie は RFC 6265 に寄せて "; " で結合
+        // - その他はカンマ結合（簡易）
+        const bool is_cookie =
+            HeaderName::fromString(name) == HeaderName::COOKIE;
+        const std::string sep = is_cookie ? "; " : ",";
         std::string merged = values[0];
         for (size_t i = 1; i < values.size(); ++i)
         {
-            merged += ",";
+            merged += sep;
             merged += values[i];
         }
         v.setHttpHeader(name, merged);

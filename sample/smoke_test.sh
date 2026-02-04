@@ -312,4 +312,10 @@ run_sample sample/05_upload_store/webserv_location_override.conf bash -lc '
   test "$(wc -c <"$dest_big" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_10m" | tr -d "[:space:]")"
 '
 
+# --- 06_cookie ---
+run_sample sample/06_cookie/webserv.conf bash -lc '
+  set -euo pipefail
+  python3 sample/06_cookie/test_cookie.py
+'
+
 echo "All sample smoke checks passed."

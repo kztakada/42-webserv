@@ -12,6 +12,7 @@ webserv の手動動作確認（`curl`）用のサンプル設定と素材置き
 - `03_autoindex/`: autoindex（ディレクトリ一覧HTML）
 - `04_cgi/`: CGI（python/php/node/bash）
 - `05_upload_store/`: upload_store（保存先、client_max_body_size のデフォルト/継承/上書き、境界）
+- `06_cookie/`: CGI Cookie（Cookie->HTTP_COOKIE、Set-Cookie転送、2回アクセスでID保持）
 
 ## smoke test
 

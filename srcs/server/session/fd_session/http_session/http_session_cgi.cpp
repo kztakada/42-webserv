@@ -22,6 +22,15 @@ static std::string dirnameOf_(const std::string& path)
     return path.substr(0, pos);
 }
 
+static bool isPhpCgiExecutor_(const std::string& executor_path)
+{
+    const std::string::size_type pos = executor_path.find_last_of('/');
+    const std::string base = (pos == std::string::npos)
+                                 ? executor_path
+                                 : executor_path.substr(pos + 1);
+    return base.find("php-cgi") != std::string::npos;
+}
+
 Result<void> HttpSession::startCgi_()
 {
     if (!handler_.hasLocationRouting())
@@ -61,6 +70,8 @@ Result<void> HttpSession::startCgi_()
     std::map<std::string, std::string> env = meta.getAll();
     env["SCRIPT_FILENAME"] = ctx.script_filename.str();
     env["QUERY_STRING"] = ctx.query_string;
+    if (isPhpCgiExecutor_(ctx.executor_path.str()))
+        env["REDIRECT_STATUS"] = "200";
 
     // 実行: executor を execve し、script_filename を引数に渡す
     std::vector<std::string> args;

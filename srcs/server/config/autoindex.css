@@ -1,0 +1,100 @@
+/*
+ * Autoindex page stylesheet
+ *
+ * 編集して webserv の autoindex 表示レイアウトを調整できます。
+ * - 反映は「次のリクエスト」から（サーバー再起動なしでOK）
+ */
+
+:root {
+  --bg: #0b1220;
+  --panel: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.14);
+  --text: #e7edf7;
+  --muted: rgba(231, 237, 247, 0.70);
+  --link: #7dd3fc;
+  --link-hover: #38bdf8;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(56,189,248,0.25), transparent 55%),
+              radial-gradient(900px 600px at 90% 20%, rgba(167,139,250,0.18), transparent 60%),
+              var(--bg);
+  color: var(--text);
+  font: 14px/1.6 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+}
+
+.wsv-container {
+  max-width: 980px;
+  margin: 48px auto;
+  padding: 0 16px;
+}
+
+.wsv-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+
+.wsv-header {
+  padding: 18px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wsv-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.wsv-path {
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.wsv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wsv-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wsv-item:first-child {
+  border-top: 0;
+}
+
+.wsv-icon {
+  width: 18px;
+  opacity: 0.85;
+  text-align: center;
+}
+
+.wsv-link {
+  color: var(--link);
+  text-decoration: none;
+  font-family: var(--mono);
+}
+
+.wsv-link:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+
+.wsv-footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}

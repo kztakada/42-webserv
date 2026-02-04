@@ -466,11 +466,3 @@ TEST(LocationRouting, CgiContextSplitsScriptNameAndPathInfo)
     EXPECT_EQ(c.unwrap().query_string, std::string("a=b"));
     EXPECT_EQ(c.unwrap().script_filename.str(), root + "/test.cgi");
 }
-
-TEST(LocationRouting, DefaultErrorPageContainsStatusLine)
-{
-    std::string body = server::LocationRouting::getDefaultErrorPageBody(
-        http::HttpStatus::NOT_FOUND);
-    EXPECT_NE(body.find("404"), std::string::npos);
-    EXPECT_NE(body.find("Not Found"), std::string::npos);
-}

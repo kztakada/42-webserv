@@ -1,9 +1,14 @@
 #include "server/request_processor/request_processor.hpp"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
+#include <algorithm>
 #include <cstddef>
+#include <sstream>
+#include <utility>
 #include <vector>
 
 #include "http/content_types.hpp"
@@ -12,6 +17,309 @@
 namespace server
 {
 using utils::result::Result;
+
+static std::string htmlEscape_(const std::string& s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for (std::string::size_type i = 0; i < s.size(); ++i)
+    {
+        const char c = s[i];
+        if (c == '&')
+            out += "&amp;";
+        else if (c == '<')
+            out += "&lt;";
+        else if (c == '>')
+            out += "&gt;";
+        else if (c == '\"')
+            out += "&quot;";
+        else
+            out.push_back(c);
+    }
+    return out;
+}
+
+static bool isUnreservedUriChar_(unsigned char c)
+{
+    if (c >= 'a' && c <= 'z')
+        return true;
+    if (c >= 'A' && c <= 'Z')
+        return true;
+    if (c >= '0' && c <= '9')
+        return true;
+    if (c == '-' || c == '.' || c == '_' || c == '~')
+        return true;
+    return false;
+}
+
+static std::string percentEncodeUriComponent_(const std::string& s)
+{
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    for (std::string::size_type i = 0; i < s.size(); ++i)
+    {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (isUnreservedUriChar_(c))
+        {
+            out.push_back(static_cast<char>(c));
+        }
+        else
+        {
+            out.push_back('%');
+            out.push_back(kHex[(c >> 4) & 0x0F]);
+            out.push_back(kHex[c & 0x0F]);
+        }
+    }
+    return out;
+}
+
+static std::string parentUriPath_(const std::string& uri_dir_path)
+{
+    if (uri_dir_path.empty() || uri_dir_path[0] != '/')
+        return std::string("/");
+    if (uri_dir_path == "/")
+        return std::string("/");
+
+    std::string p = uri_dir_path;
+    while (!p.empty() && p[p.size() - 1] == '/')
+        p.erase(p.size() - 1);
+    const std::string::size_type last = p.find_last_of('/');
+    if (last == std::string::npos)
+        return std::string("/");
+    if (last == 0)
+        return std::string("/");
+    return p.substr(0, last + 1);
+}
+
+static Result<std::string> readFileToString_(const std::string& path)
+{
+    const int fd = ::open(path.c_str(), O_RDONLY);
+    if (fd < 0)
+    {
+        return Result<std::string>(ERROR, std::string(), "open failed");
+    }
+
+    std::string out;
+    char buf[4096];
+    for (;;)
+    {
+        const ssize_t n = ::read(fd, buf, sizeof(buf));
+        if (n == 0)
+            break;
+        if (n < 0)
+        {
+            (void)::close(fd);
+            return Result<std::string>(ERROR, std::string(), "read failed");
+        }
+        out.append(buf, buf + n);
+    }
+    (void)::close(fd);
+    if (out.empty())
+    {
+        return Result<std::string>(ERROR, std::string(), "file is empty");
+    }
+    return out;
+}
+
+static Result<std::string> tryLoadConfigText_(const std::string& file_name)
+{
+    const std::string p1 = std::string("server/config/") + file_name;
+    Result<std::string> r1 = readFileToString_(p1);
+    if (r1.isOk())
+        return r1.unwrap();
+
+    const std::string p2 = std::string("srcs/server/config/") + file_name;
+    Result<std::string> r2 = readFileToString_(p2);
+    if (r2.isOk())
+        return r2.unwrap();
+
+    return Result<std::string>(ERROR, std::string(), "config file not found");
+}
+
+static std::string loadAutoIndexCss_()
+{
+    Result<std::string> r = tryLoadConfigText_("autoindex.css");
+    if (r.isOk())
+        return r.unwrap();
+    return std::string();
+}
+
+static std::string loadAutoIndexTemplate_()
+{
+    Result<std::string> r = tryLoadConfigText_("autoindex.html");
+    if (r.isOk())
+        return r.unwrap();
+    return std::string();
+}
+
+static std::string loadAutoIndexEntryTemplate_()
+{
+    Result<std::string> r = tryLoadConfigText_("autoindex_entry.html");
+    if (r.isOk())
+        return r.unwrap();
+    return std::string();
+}
+
+static std::string loadAutoIndexParentEntryTemplate_()
+{
+    Result<std::string> r = tryLoadConfigText_("autoindex_parent_entry.html");
+    if (r.isOk())
+        return r.unwrap();
+    return std::string();
+}
+
+static void replaceAll_(
+    std::string* inout, const std::string& from, const std::string& to)
+{
+    if (inout == NULL)
+        return;
+    if (from.empty())
+        return;
+
+    std::string& s = *inout;
+    std::string::size_type pos = 0;
+    while ((pos = s.find(from, pos)) != std::string::npos)
+    {
+        s.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+}
+
+static std::string renderTemplate_(const std::string& tmpl,
+    const std::vector<std::pair<std::string, std::string> >& replacements)
+{
+    std::string out = tmpl;
+    for (size_t i = 0; i < replacements.size(); ++i)
+    {
+        replaceAll_(&out, replacements[i].first, replacements[i].second);
+    }
+    return out;
+}
+
+static Result<std::string> buildAutoIndexBody_(const AutoIndexContext& ctx)
+{
+    const std::string dir = ctx.directory_path.str();
+    DIR* dp = ::opendir(dir.c_str());
+    if (dp == NULL)
+        return Result<std::string>(ERROR, std::string(), "opendir failed");
+
+    std::vector<std::string> entries;
+    for (;;)
+    {
+        struct dirent* de = ::readdir(dp);
+        if (de == NULL)
+            break;
+        const std::string name(de->d_name ? de->d_name : "");
+        if (name.empty())
+            continue;
+        if (name == "." || name == "..")
+            continue;
+        entries.push_back(name);
+    }
+    ::closedir(dp);
+
+    std::sort(entries.begin(), entries.end());
+
+    std::string uri = ctx.uri_dir_path;
+    if (uri.empty() || uri[0] != '/')
+        uri = "/";
+    if (uri[uri.size() - 1] != '/')
+        uri += "/";
+
+    const std::string css = loadAutoIndexCss_();
+    const std::string tmpl = loadAutoIndexTemplate_();
+    const std::string entry_tmpl = loadAutoIndexEntryTemplate_();
+    const std::string parent_entry_tmpl = loadAutoIndexParentEntryTemplate_();
+
+    if (css.empty() || tmpl.empty() || entry_tmpl.empty() ||
+        parent_entry_tmpl.empty())
+    {
+        return Result<std::string>(
+            ERROR, std::string(), "autoindex template/css missing");
+    }
+
+    std::string entries_html;
+    if (uri != "/")
+    {
+        const std::string parent = parentUriPath_(uri);
+        std::string row = parent_entry_tmpl;
+        std::vector<std::pair<std::string, std::string> > repl;
+        repl.push_back(std::make_pair("{{HREF}}", htmlEscape_(parent)));
+        entries_html += renderTemplate_(row, repl);
+    }
+
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const std::string& name = entries[i];
+        const std::string entry_physical = dir + "/" + name;
+        struct stat st;
+        bool is_dir = false;
+        if (::stat(entry_physical.c_str(), &st) == 0)
+            is_dir = S_ISDIR(st.st_mode);
+
+        std::string href = uri + percentEncodeUriComponent_(name);
+        std::string label = name;
+        if (is_dir)
+        {
+            href += "/";
+            label += "/";
+        }
+
+        std::string row = entry_tmpl;
+        std::vector<std::pair<std::string, std::string> > repl;
+        repl.push_back(std::make_pair("{{HREF}}", htmlEscape_(href)));
+        repl.push_back(std::make_pair("{{LABEL}}", htmlEscape_(label)));
+        entries_html += renderTemplate_(row, repl);
+    }
+
+    const std::string title = std::string("Index of ") + uri;
+
+    std::vector<std::pair<std::string, std::string> > replacements;
+    replacements.push_back(std::make_pair("{{CSS}}", css));
+    replacements.push_back(std::make_pair("{{TITLE}}", htmlEscape_(title)));
+    replacements.push_back(std::make_pair("{{PATH}}", htmlEscape_(uri)));
+    replacements.push_back(std::make_pair("{{ENTRIES}}", entries_html));
+    return renderTemplate_(tmpl, replacements);
+}
+
+static std::string buildDefaultErrorPageBody_(const http::HttpStatus& status)
+{
+    std::string css;
+    {
+        Result<std::string> r = tryLoadConfigText_("error_page.css");
+        if (r.isOk())
+            css = r.unwrap();
+    }
+    std::string tmpl;
+    {
+        Result<std::string> r = tryLoadConfigText_("error_page.html");
+        if (r.isOk())
+            tmpl = r.unwrap();
+    }
+
+    std::ostringstream oss;
+    oss << status.getCode() << " " << status.getMessage();
+    const std::string status_line = oss.str();
+
+    std::ostringstream code_oss;
+    code_oss << status.getCode();
+    const std::string code_str = code_oss.str();
+
+    if (tmpl.empty())
+    {
+        // 最終フォールバック（HTMLテンプレが無い場合でも何か返す）
+        return status_line + "\n";
+    }
+
+    std::vector<std::pair<std::string, std::string> > replacements;
+    replacements.push_back(std::make_pair("{{CSS}}", css));
+    replacements.push_back(std::make_pair("{{CODE}}", htmlEscape_(code_str)));
+    replacements.push_back(
+        std::make_pair("{{STATUS_LINE}}", htmlEscape_(status_line)));
+    replacements.push_back(
+        std::make_pair("{{MESSAGE}}", htmlEscape_(status.getMessage())));
+    return renderTemplate_(tmpl, replacements);
+}
 
 static std::string extractExtension_(const std::string& path)
 {
@@ -33,7 +341,7 @@ static Result<RequestProcessor::Output> respondWithErrorPage_(
     if (s.isError())
         return Result<RequestProcessor::Output>(ERROR, s.getErrorMessage());
 
-    const std::string body = LocationRouting::getDefaultErrorPageBody(status);
+    const std::string body = buildDefaultErrorPageBody_(status);
     (void)out_response.setHeader("Content-Type", "text/html");
     (void)out_response.setExpectedContentLength(
         static_cast<unsigned long>(body.size()));
@@ -292,9 +600,48 @@ Result<RequestProcessor::Output> RequestProcessor::process(
                     out.should_close_connection = false;
                     return out;
                 }
+
+                if (ctx.autoindex_enabled)
+                {
+                    Result<std::string> body = buildAutoIndexBody_(ctx);
+                    if (body.isError())
+                    {
+                        http::HttpRequest next;
+                        if (tryBuildErrorPageInternalRedirect_(router_,
+                                server_ip_, server_port_, current,
+                                http::HttpStatus::FORBIDDEN, &next))
+                        {
+                            if (!has_preserved_error_status)
+                            {
+                                has_preserved_error_status = true;
+                                preserved_error_status =
+                                    http::HttpStatus::FORBIDDEN;
+                            }
+                            current = next;
+                            continue;
+                        }
+                        return respondWithErrorPage_(
+                            http::HttpStatus::FORBIDDEN, out_response);
+                    }
+
+                    Result<void> s = out_response.setStatus(
+                        has_preserved_error_status
+                            ? preserved_error_status
+                            : http::HttpStatus(http::HttpStatus::OK));
+                    if (s.isError())
+                        return Result<Output>(ERROR, s.getErrorMessage());
+
+                    (void)out_response.setHeader("Content-Type", "text/html");
+                    (void)out_response.setExpectedContentLength(
+                        static_cast<unsigned long>(body.unwrap().size()));
+
+                    out.body_source = new StringBodySource(body.unwrap());
+                    out.should_close_connection = false;
+                    return out;
+                }
             }
 
-            // autoindex は未実装なので 403 を返す
+            // index が無く、autoindex も無効の場合は 403
             http::HttpRequest next;
             if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
                     server_port_, current, http::HttpStatus::FORBIDDEN, &next))

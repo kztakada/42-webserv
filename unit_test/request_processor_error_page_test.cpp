@@ -226,3 +226,48 @@ TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
 
     delete out.unwrap().body_source;
 }
+
+TEST(RequestProcessor, NotFoundUsesDefaultErrorPageWhenNoCustom)
+{
+    const std::string root = makeTempDirOrDie_();
+
+    server::VirtualServerConf vs;
+    ASSERT_TRUE(vs.appendListen("", "8080").isOk());
+    ASSERT_TRUE(vs.setRootDir(root).isOk());
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/").isOk());
+    ASSERT_TRUE(vs.appendLocation(loc).isOk());
+    ASSERT_TRUE(vs.isValid());
+
+    server::ServerConfig cfg;
+    ASSERT_TRUE(cfg.appendServer(vs).isOk());
+    ASSERT_TRUE(cfg.isValid());
+
+    server::RequestRouter router(cfg);
+
+    utils::result::Result<IPAddress> ip =
+        IPAddress::parseIpv4Numeric("127.0.0.1");
+    ASSERT_TRUE(ip.isOk());
+    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    ASSERT_TRUE(port.isOk());
+
+    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+
+    http::HttpRequest req = mustParseRequest_(
+        "GET /missing.txt HTTP/1.1\r\nHost: example.com\r\n\r\n");
+
+    http::HttpResponse resp;
+    utils::result::Result<server::RequestProcessor::Output> out =
+        proc.process(req, resp);
+    ASSERT_TRUE(out.isOk());
+
+    EXPECT_EQ(resp.getStatus().getCode(), 404u);
+    ASSERT_TRUE(out.unwrap().body_source != NULL);
+
+    std::string body = readAll_(out.unwrap().body_source);
+    EXPECT_NE(body.find("404"), std::string::npos);
+    EXPECT_NE(body.find("Not Found"), std::string::npos);
+
+    delete out.unwrap().body_source;
+}

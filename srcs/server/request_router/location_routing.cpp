@@ -321,28 +321,6 @@ LocationRouting::resolvePhysicalPathUnderRootOrError() const
 {
     return resolvePhysicalPathUnderRootOrError(false);
 }
-std::string LocationRouting::getDefaultErrorPageBody(
-    const http::HttpStatus& status)
-{
-    std::string body;
-    body += "<!doctype html>\n";
-    body += "<html><head><meta charset=\"utf-8\">";
-    body += "<title>";
-    body += toString_(status);
-    body += "</title></head><body>";
-    body += "<h1>";
-    body += toString_(status);
-    body += "</h1>";
-    body += "</body></html>\n";
-    return body;
-}
-
-std::string LocationRouting::toString_(const http::HttpStatus& status)
-{
-    std::ostringstream oss;
-    oss << status.getCode() << " " << status.getMessage();
-    return oss.str();
-}
 
 Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
 {

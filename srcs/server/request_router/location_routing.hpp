@@ -2,7 +2,6 @@
 #define WEBSERV_SERVER_LOCATION_ROUTING_HPP_
 
 #include <cstddef>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -112,11 +111,7 @@ class LocationRouting
     Result<utils::path::PhysicalPath> resolvePhysicalPathUnderRootOrError()
         const;
 
-    static std::string getDefaultErrorPageBody(const http::HttpStatus& status);
-
    private:
-    static std::string toString_(const http::HttpStatus& status);
-
     const VirtualServer* virtual_server_;
     const LocationDirective* location_;
     ResolvedRequestContext request_ctx_;

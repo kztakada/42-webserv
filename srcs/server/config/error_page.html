@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{{STATUS_LINE}}</title>
+    <style>
+{{CSS}}
+    </style>
+  </head>
+  <body>
+    <div class="wsv-err" role="document">
+      <div class="wsv-err__header">
+        <h1 class="wsv-err__code">{{CODE}}</h1>
+        <p class="wsv-err__line">{{STATUS_LINE}}</p>
+      </div>
+      <div class="wsv-err__body">
+        <p class="wsv-err__message">{{MESSAGE}}</p>
+        <div class="wsv-err__hint">webserv default error page</div>
+      </div>
+    </div>
+  </body>
+</html>

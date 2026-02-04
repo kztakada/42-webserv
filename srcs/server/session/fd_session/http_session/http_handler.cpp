@@ -19,6 +19,7 @@ HttpHandler::HttpHandler(HttpRequest& request, HttpResponse& response,
       body_sink_(request_, body_store_),
       has_routing_(false),
       location_routing_(),
+      has_configured_body_store_for_upload_(false),
       next_step_(NEED_MORE_DATA),
       should_close_connection_(false)
 {
@@ -30,6 +31,7 @@ void HttpHandler::reset()
 {
     has_routing_ = false;
     location_routing_ = LocationRouting();
+    has_configured_body_store_for_upload_ = false;
     next_step_ = NEED_MORE_DATA;
     should_close_connection_ = false;
     body_store_.reset();
@@ -135,6 +137,21 @@ Result<void> HttpHandler::ensureRoutingAndApplyBodyLimit_()
         Result<void> routing_result = decideRouting_();
         if (routing_result.isError())
             return routing_result;
+    }
+
+    // upload_store の場合は、body の保存先を upload_store 配下の
+    // destination_path に差し替える。
+    if (!has_configured_body_store_for_upload_ &&
+        location_routing_.getNextAction() == STORE_BODY)
+    {
+        Result<UploadContext> up = location_routing_.getUploadContext();
+        if (up.isOk())
+        {
+            UploadContext ctx = up.unwrap();
+            (void)body_store_.configureForUpload(
+                ctx.destination_path.str(), ctx.allow_overwrite);
+            has_configured_body_store_for_upload_ = true;
+        }
     }
 
     Result<unsigned long> max_body_result =

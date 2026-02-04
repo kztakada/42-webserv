@@ -493,6 +493,33 @@ Result<RequestProcessor::Output> RequestProcessor::process(
             return respondWithErrorPage_(route.getHttpStatus(), out_response);
         }
 
+        if (action == STORE_BODY)
+        {
+            // upload_store に保存済み（body は Session/BodyStore
+            // 側で書き込み済み） ここでは結果レスポンスだけ生成する。
+            if (current.getMethod() != http::HttpMethod::POST)
+            {
+                return respondWithErrorPage_(
+                    http::HttpStatus::NOT_ALLOWED, out_response);
+            }
+
+            Result<UploadContext> up = route.getUploadContext();
+            if (up.isError())
+            {
+                return respondWithErrorPage_(
+                    http::HttpStatus::BAD_REQUEST, out_response);
+            }
+
+            Result<void> s = out_response.setStatus(http::HttpStatus::CREATED);
+            if (s.isError())
+                return Result<Output>(ERROR, s.getErrorMessage());
+
+            (void)out_response.setExpectedContentLength(0);
+            out.body_source = NULL;
+            out.should_close_connection = false;
+            return out;
+        }
+
         if (action != SERVE_STATIC && action != SERVE_AUTOINDEX)
         {
             return respondWithErrorPage_(

@@ -41,7 +41,12 @@ std::string BodyStore::buildPath_(const void* unique_key)
 }
 
 BodyStore::BodyStore(const void* unique_key)
-    : path_(buildPath_(unique_key)), write_fd_(-1), size_bytes_(0)
+    : default_path_(buildPath_(unique_key)),
+      path_(default_path_),
+      write_fd_(-1),
+      size_bytes_(0),
+      remove_on_reset_(true),
+      allow_overwrite_(true)
 {
 }
 
@@ -56,9 +61,31 @@ void BodyStore::reset()
     }
     size_bytes_ = 0;
 
-    // 使い回し方針でも「残骸を残さない」ために削除を試みる。
-    // 失敗しても致命ではないので、呼び出し側が必要なら結果を確認する。
-    (void)removeFile();
+    if (remove_on_reset_)
+    {
+        // 使い回し方針でも「残骸を残さない」ために削除を試みる。
+        // 失敗しても致命ではないので、呼び出し側が必要なら結果を確認する。
+        (void)removeFile();
+    }
+
+    // 次のリクエストでは必ず一時ファイルに戻す。
+    path_ = default_path_;
+    remove_on_reset_ = true;
+    allow_overwrite_ = true;
+}
+
+Result<void> BodyStore::configureForUpload(
+    const std::string& destination_path, bool allow_overwrite)
+{
+    if (write_fd_ >= 0)
+        return Result<void>(ERROR, "body store is already opened");
+    if (destination_path.empty())
+        return Result<void>(ERROR, "destination path is empty");
+
+    path_ = destination_path;
+    remove_on_reset_ = false;
+    allow_overwrite_ = allow_overwrite;
+    return Result<void>();
 }
 
 Result<void> BodyStore::removeFile()
@@ -79,7 +106,13 @@ Result<void> BodyStore::begin()
     if (write_fd_ >= 0)
         return Result<void>();
 
-    const int fd = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int flags = O_WRONLY | O_CREAT;
+    if (allow_overwrite_)
+        flags |= O_TRUNC;
+    else
+        flags |= O_EXCL;
+
+    const int fd = ::open(path_.c_str(), flags, 0644);
     if (fd < 0)
         return Result<void>(ERROR, "open() failed");
 

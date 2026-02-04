@@ -25,6 +25,15 @@ if ! command -v bash >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v dd >/dev/null 2>&1; then
+  echo "dd is required for upload_store sample" >&2
+  exit 1
+fi
+if ! command -v mktemp >/dev/null 2>&1; then
+  echo "mktemp is required for upload_store sample" >&2
+  exit 1
+fi
+
 run_sample() {
   local config="$1"; shift
   local log="/tmp/webserv_sample_$$.log"
@@ -33,8 +42,10 @@ run_sample() {
   local pid=$!
 
   cleanup() {
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
+    if [ -n "${pid:-}" ]; then
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+    fi
   }
   trap cleanup EXIT INT TERM
 
@@ -42,6 +53,8 @@ run_sample() {
   if ! kill -0 "$pid" 2>/dev/null; then
     echo "webserv exited early for $config" >&2
     cat "$log" >&2 || true
+    trap - EXIT INT TERM
+    cleanup
     return 1
   fi
 
@@ -198,6 +211,105 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
   r=$(curl -sS -i "http://127.0.0.1:18084/cgi_bash/hello.js")
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "const fs"
+'
+
+# --- 05_upload_store ---
+run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
+  set -euo pipefail
+
+  store="sample/05_upload_store/store_default"
+  dest_2m="$store/default_2m.bin"
+  dest_512k="$store/default_512k.bin"
+  tmp_small=$(mktemp /tmp/webserv_upload_512k_XXXXXX.bin)
+  tmp_big=$(mktemp /tmp/webserv_upload_2m_XXXXXX.bin)
+
+  cleanup_upload() {
+    rm -f "$tmp_small" "$tmp_big"
+    rm -f "$dest_2m" "$dest_512k"
+  }
+  trap cleanup_upload EXIT
+
+  # デフォルト(1MB)想定: 2MB は 413
+  dd if=/dev/zero of="$tmp_big" bs=1M count=2 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_big" http://127.0.0.1:18085/upload/default_2m.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+  test ! -f "$dest_2m"
+
+  # 512KB は成功（POST -> 201）
+  dd if=/dev/zero of="$tmp_small" bs=1K count=512 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_small" http://127.0.0.1:18085/upload/default_512k.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_512k"
+
+  size_dest=$(wc -c <"$dest_512k" | tr -d "[:space:]")
+  size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
+  test "$size_dest" -eq "$size_src"
+'
+
+run_sample sample/05_upload_store/webserv_inherit_server_limit.conf bash -lc '
+  set -euo pipefail
+
+  store="sample/05_upload_store/store_inherit"
+  dest="$store/inherit_10m.bin"
+  tmp_10m=$(mktemp /tmp/webserv_upload_10m_XXXXXX.bin)
+
+  cleanup_upload() {
+    rm -f "$tmp_10m"
+    rm -f "$dest"
+  }
+  trap cleanup_upload EXIT
+
+  # server の client_max_body_size(12M) を location が継承 → 10MB は成功
+  dd if=/dev/zero of="$tmp_10m" bs=1M count=10 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_10m" http://127.0.0.1:18086/upload/inherit_10m.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest"
+
+  size_dest=$(wc -c <"$dest" | tr -d "[:space:]")
+  size_src=$(wc -c <"$tmp_10m" | tr -d "[:space:]")
+  test "$size_dest" -eq "$size_src"
+'
+
+run_sample sample/05_upload_store/webserv_location_override.conf bash -lc '
+  set -euo pipefail
+
+  store="sample/05_upload_store/store_override"
+  dest_small="$store/override_1m.bin"
+  dest_small_plus1="$store/override_1m_plus1.bin"
+  dest_big="$store/override_10m.bin"
+  tmp_1m=$(mktemp /tmp/webserv_upload_1m_XXXXXX.bin)
+  tmp_1m_plus1=$(mktemp /tmp/webserv_upload_1m_plus1_XXXXXX.bin)
+  tmp_10m=$(mktemp /tmp/webserv_upload_10m_XXXXXX.bin)
+  tmp_1k=$(mktemp /tmp/webserv_upload_1k_XXXXXX.bin)
+
+  cleanup_upload() {
+    rm -f "$tmp_1m" "$tmp_1m_plus1" "$tmp_10m" "$tmp_1k"
+    rm -f "$dest_small" "$dest_small_plus1" "$dest_big"
+  }
+  trap cleanup_upload EXIT
+
+  # location 上書き: 1,048,576 bytes ぴったりは OK
+  dd if=/dev/zero of="$tmp_1m" bs=1M count=1 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_1m" http://127.0.0.1:18087/upload_small/override_1m.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_small"
+  test "$(wc -c <"$dest_small" | tr -d "[:space:]")" -eq 1048576
+
+  # +1 は 413
+  cp "$tmp_1m" "$tmp_1m_plus1"
+  printf "\\0" >>"$tmp_1m_plus1"
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_1m_plus1" http://127.0.0.1:18087/upload_small/override_1m_plus1.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+  test ! -f "$dest_small_plus1"
+
+  rm -f "$dest_small"
+
+  # 別 location で上書き（20M）: 10MB は成功
+  dd if=/dev/zero of="$tmp_10m" bs=1M count=10 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_10m" http://127.0.0.1:18087/upload_big/override_10m.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_big"
+  test "$(wc -c <"$dest_big" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_10m" | tr -d "[:space:]")"
 '
 
 echo "All sample smoke checks passed."

@@ -260,7 +260,7 @@ Result<UploadContext> LocationRouting::getUploadContext() const
     }
     ctx.destination_path = dest.unwrap();
     ctx.allow_create_leaf = true;
-    ctx.allow_overwrite = (request_method_ == http::HttpMethod::PUT);
+    ctx.allow_overwrite = false;
     return ctx;
 }
 
@@ -387,9 +387,9 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
     }
 
     // upload
+    // 仕様: upload_store は POST のみ対応
     if (location_->hasUploadStore() &&
-        (request_method_ == http::HttpMethod::POST ||
-            request_method_ == http::HttpMethod::PUT))
+        (request_method_ == http::HttpMethod::POST))
     {
         next_action_ = STORE_BODY;
         return Result<void>();

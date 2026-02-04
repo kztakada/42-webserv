@@ -16,6 +16,12 @@ class BodyStore
     explicit BodyStore(const void* unique_key);
     ~BodyStore();
 
+    // upload_store 向けに出力先を差し替える。
+    // - reset() では削除しない（アップロード結果を保持する）
+    // - allow_overwrite=false の場合、既存ファイルがあると open に失敗する
+    Result<void> configureForUpload(
+        const std::string& destination_path, bool allow_overwrite);
+
     Result<void> begin();
     Result<void> append(const utils::Byte* data, size_t len);
     Result<void> finish();
@@ -32,9 +38,13 @@ class BodyStore
     void reset();
 
    private:
+    std::string default_path_;
     std::string path_;
     int write_fd_;
     size_t size_bytes_;
+
+    bool remove_on_reset_;
+    bool allow_overwrite_;
 
     BodyStore();
     BodyStore(const BodyStore& rhs);

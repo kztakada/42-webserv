@@ -80,6 +80,8 @@ class HttpHandler
     bool has_routing_;
     LocationRouting location_routing_;
 
+    bool has_configured_body_store_for_upload_;
+
     NextStep next_step_;
     bool should_close_connection_;
 

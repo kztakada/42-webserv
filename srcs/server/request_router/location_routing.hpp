@@ -17,6 +17,7 @@
 
 namespace server
 {
+using namespace utils::result;
 
 enum ActionType
 {
@@ -75,25 +76,25 @@ class LocationRouting
     http::HttpStatus getHttpStatus() const;
 
     // REDIRECT_EXTERNAL のときは URL、REDIRECT_INTERNAL のときは URI。
-    utils::result::Result<std::string> getRedirectLocation() const;
+    Result<std::string> getRedirectLocation() const;
 
     // SERVE_STATIC の「次に扱うURI」。
-    utils::result::Result<std::string> getStaticUriPath() const;
+    Result<std::string> getStaticUriPath() const;
 
     // REDIRECT_INTERNAL の場合に、次の内部リクエストを生成して返す。
-    utils::result::Result<http::HttpRequest> getInternalRedirectRequest() const;
+    Result<http::HttpRequest> getInternalRedirectRequest() const;
 
     // SERVE_STATIC / SERVE_AUTOINDEX の場合のみ有効。
     // uri がディレクトリを指す場合の index 候補や autoindex 方針を返す。
-    utils::result::Result<AutoIndexContext> getAutoIndexContext() const;
+    Result<AutoIndexContext> getAutoIndexContext() const;
 
     // RUN_CGI の場合のみ有効。
-    utils::result::Result<CgiContext> getCgiContext() const;
+    Result<CgiContext> getCgiContext() const;
 
     // STORE_BODY の場合のみ有効。
-    utils::result::Result<UploadContext> getUploadContext() const;
+    Result<UploadContext> getUploadContext() const;
 
-    utils::result::Result<unsigned long> clientMaxBodySize() const;
+    Result<unsigned long> clientMaxBodySize() const;
 
     // error_page の設定を問い合わせる（設定がなければ false）。
     // out_path はそのまま location 設定の値（URIパス or URL）を返す。
@@ -106,10 +107,10 @@ class LocationRouting
     // - symlink による root 逸脱を検知した場合は ERROR。
     // - allow_nonexistent_leaf=true の場合、末尾が存在しなくても親が安全なら
     // OK。
-    utils::result::Result<utils::path::PhysicalPath>
-    resolvePhysicalPathUnderRootOrError(bool allow_nonexistent_leaf) const;
-    utils::result::Result<utils::path::PhysicalPath>
-    resolvePhysicalPathUnderRootOrError() const;
+    Result<utils::path::PhysicalPath> resolvePhysicalPathUnderRootOrError(
+        bool allow_nonexistent_leaf) const;
+    Result<utils::path::PhysicalPath> resolvePhysicalPathUnderRootOrError()
+        const;
 
     static std::string getDefaultErrorPageBody(const http::HttpStatus& status);
 
@@ -127,15 +128,15 @@ class LocationRouting
     std::string redirect_location_;
     std::string query_string_;
 
-    utils::result::Result<void> decideAction_(const http::HttpRequest& req);
-    utils::result::Result<void> applyErrorPageOrRespondError_();
+    Result<void> decideAction_(const http::HttpRequest& req);
+    Result<void> applyErrorPageOrRespondError_();
 
-    utils::result::Result<void> validateActionIs_(
+    Result<void> validateActionIs_(
         ActionType expected, const std::string& api_name) const;
-    utils::result::Result<void> validateActionIsOneOfStaticOrAutoindex_(
+    Result<void> validateActionIsOneOfStaticOrAutoindex_(
         const std::string& api_name) const;
 
-    utils::result::Result<http::HttpRequest> buildInternalRedirectRequest_(
+    Result<http::HttpRequest> buildInternalRedirectRequest_(
         const std::string& uri_path) const;
 };
 

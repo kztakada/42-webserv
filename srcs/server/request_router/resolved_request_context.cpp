@@ -2,13 +2,14 @@
 
 namespace server
 {
+using utils::result::Result;
 
 ResolvedRequestContext::ResolvedRequestContext()
     : request_(NULL), request_path_(), host_(), minor_version_(1)
 {
 }
 
-utils::result::Result<ResolvedRequestContext> ResolvedRequestContext::create(
+Result<ResolvedRequestContext> ResolvedRequestContext::create(
     const http::HttpRequest& request)
 {
     ResolvedRequestContext out;
@@ -19,15 +20,13 @@ utils::result::Result<ResolvedRequestContext> ResolvedRequestContext::create(
     const std::string& raw_path = request.getPath();
     if (raw_path.empty() || raw_path[0] != '/')
     {
-        return utils::result::Result<ResolvedRequestContext>(
-            utils::result::ERROR, ResolvedRequestContext(),
-            "request path must start with '/'");
+        return Result<ResolvedRequestContext>(utils::result::ERROR,
+            ResolvedRequestContext(), "request path must start with '/'");
     }
     if (raw_path.find('\0') != std::string::npos)
     {
-        return utils::result::Result<ResolvedRequestContext>(
-            utils::result::ERROR, ResolvedRequestContext(),
-            "request path contains NUL");
+        return Result<ResolvedRequestContext>(utils::result::ERROR,
+            ResolvedRequestContext(), "request path contains NUL");
     }
 
     out.request_path_ = normalizeSlashes_(raw_path);
@@ -60,7 +59,7 @@ const http::HttpRequest* ResolvedRequestContext::getRequest() const
     return request_;
 }
 
-utils::result::Result<void> ResolvedRequestContext::resolveDotSegmentsOrError()
+Result<void> ResolvedRequestContext::resolveDotSegmentsOrError()
 {
     std::vector<std::string> segments;
     segments.reserve(16);
@@ -94,7 +93,7 @@ utils::result::Result<void> ResolvedRequestContext::resolveDotSegmentsOrError()
         {
             if (segments.empty())
             {
-                return utils::result::Result<void>(
+                return Result<void>(
                     utils::result::ERROR, "request path escapes root by '..'");
             }
             segments.pop_back();
@@ -118,13 +117,13 @@ utils::result::Result<void> ResolvedRequestContext::resolveDotSegmentsOrError()
     }
 
     request_path_ = out;
-    return utils::result::Result<void>();
+    return Result<void>();
 }
 
 std::string ResolvedRequestContext::extractHost_(
     const http::HttpRequest& request)
 {
-    utils::result::Result<const std::vector<std::string>&> host_values =
+    Result<const std::vector<std::string>&> host_values =
         request.getHeader("Host");
     if (host_values.isError() || host_values.unwrap().empty())
     {

@@ -4,6 +4,7 @@
 
 namespace server
 {
+using utils::result::Result;
 
 AutoIndexContext::AutoIndexContext()
     : directory_path(),
@@ -62,61 +63,58 @@ ActionType LocationRouting::getNextAction() const { return next_action_; }
 
 http::HttpStatus LocationRouting::getHttpStatus() const { return status_; }
 
-utils::result::Result<std::string> LocationRouting::getRedirectLocation() const
+Result<std::string> LocationRouting::getRedirectLocation() const
 {
     if (next_action_ != REDIRECT_EXTERNAL && next_action_ != REDIRECT_INTERNAL)
     {
-        return utils::result::Result<std::string>(
+        return Result<std::string>(
             utils::result::ERROR, std::string(), "redirect is not selected");
     }
     return redirect_location_;
 }
 
-utils::result::Result<std::string> LocationRouting::getStaticUriPath() const
+Result<std::string> LocationRouting::getStaticUriPath() const
 {
-    utils::result::Result<void> v =
-        validateActionIs_(SERVE_STATIC, "getStaticUriPath");
+    Result<void> v = validateActionIs_(SERVE_STATIC, "getStaticUriPath");
     if (v.isError())
     {
-        return utils::result::Result<std::string>(
+        return Result<std::string>(
             utils::result::ERROR, std::string(), v.getErrorMessage());
     }
     return request_ctx_.getRequestPath();
 }
 
-utils::result::Result<http::HttpRequest>
-LocationRouting::getInternalRedirectRequest() const
+Result<http::HttpRequest> LocationRouting::getInternalRedirectRequest() const
 {
-    utils::result::Result<void> v =
+    Result<void> v =
         validateActionIs_(REDIRECT_INTERNAL, "getInternalRedirectRequest");
     if (v.isError())
     {
-        return utils::result::Result<http::HttpRequest>(
+        return Result<http::HttpRequest>(
             utils::result::ERROR, http::HttpRequest(), v.getErrorMessage());
     }
     return buildInternalRedirectRequest_(redirect_location_);
 }
 
-utils::result::Result<AutoIndexContext> LocationRouting::getAutoIndexContext()
-    const
+Result<AutoIndexContext> LocationRouting::getAutoIndexContext() const
 {
-    utils::result::Result<void> v =
+    Result<void> v =
         validateActionIsOneOfStaticOrAutoindex_("getAutoIndexContext");
     if (v.isError())
     {
-        return utils::result::Result<AutoIndexContext>(
+        return Result<AutoIndexContext>(
             utils::result::ERROR, AutoIndexContext(), v.getErrorMessage());
     }
     if (!location_)
     {
-        return utils::result::Result<AutoIndexContext>(
+        return Result<AutoIndexContext>(
             utils::result::ERROR, AutoIndexContext(), "no location matched");
     }
 
     const std::string& uri = request_ctx_.getRequestPath();
     if (uri.empty() || uri[uri.size() - 1] != '/')
     {
-        return utils::result::Result<AutoIndexContext>(utils::result::ERROR,
+        return Result<AutoIndexContext>(utils::result::ERROR,
             AutoIndexContext(), "uri is not a directory path");
     }
 
@@ -130,12 +128,12 @@ utils::result::Result<AutoIndexContext> LocationRouting::getAutoIndexContext()
         uri_under_location = "/" + uri_under_location;
     }
 
-    utils::result::Result<utils::path::PhysicalPath> dir_physical =
+    Result<utils::path::PhysicalPath> dir_physical =
         utils::path::resolvePhysicalPathUnderRoot(
             location_->rootDir(), uri_under_location, false);
     if (dir_physical.isError())
     {
-        return utils::result::Result<AutoIndexContext>(utils::result::ERROR,
+        return Result<AutoIndexContext>(utils::result::ERROR,
             AutoIndexContext(), dir_physical.getErrorMessage());
     }
 
@@ -148,11 +146,11 @@ utils::result::Result<AutoIndexContext> LocationRouting::getAutoIndexContext()
     ctx.index_candidates.reserve(cands.size());
     for (size_t i = 0; i < cands.size(); ++i)
     {
-        utils::result::Result<utils::path::PhysicalPath> p =
+        Result<utils::path::PhysicalPath> p =
             utils::path::PhysicalPath::resolve(cands[i]);
         if (p.isError())
         {
-            return utils::result::Result<AutoIndexContext>(utils::result::ERROR,
+            return Result<AutoIndexContext>(utils::result::ERROR,
                 AutoIndexContext(), "failed to resolve index candidate");
         }
         ctx.index_candidates.push_back(p.unwrap());
@@ -160,17 +158,17 @@ utils::result::Result<AutoIndexContext> LocationRouting::getAutoIndexContext()
     return ctx;
 }
 
-utils::result::Result<CgiContext> LocationRouting::getCgiContext() const
+Result<CgiContext> LocationRouting::getCgiContext() const
 {
-    utils::result::Result<void> v = validateActionIs_(RUN_CGI, "getCgiContext");
+    Result<void> v = validateActionIs_(RUN_CGI, "getCgiContext");
     if (v.isError())
     {
-        return utils::result::Result<CgiContext>(
+        return Result<CgiContext>(
             utils::result::ERROR, CgiContext(), v.getErrorMessage());
     }
     if (!location_)
     {
-        return utils::result::Result<CgiContext>(
+        return Result<CgiContext>(
             utils::result::ERROR, CgiContext(), "no location matched");
     }
 
@@ -183,7 +181,7 @@ utils::result::Result<CgiContext> LocationRouting::getCgiContext() const
         uri_path, &executor, &ext, &best_end);
     if (best_end == std::string::npos)
     {
-        return utils::result::Result<CgiContext>(
+        return Result<CgiContext>(
             utils::result::ERROR, CgiContext(), "cgi extension not matched");
     }
 
@@ -206,35 +204,34 @@ utils::result::Result<CgiContext> LocationRouting::getCgiContext() const
         script_under_location = "/" + script_under_location;
     }
 
-    utils::result::Result<utils::path::PhysicalPath> script_physical =
+    Result<utils::path::PhysicalPath> script_physical =
         utils::path::resolvePhysicalPathUnderRoot(
             location_->rootDir(), script_under_location, true);
     if (script_physical.isError())
     {
-        return utils::result::Result<CgiContext>(utils::result::ERROR,
-            CgiContext(), script_physical.getErrorMessage());
+        return Result<CgiContext>(utils::result::ERROR, CgiContext(),
+            script_physical.getErrorMessage());
     }
     ctx.script_filename = script_physical.unwrap();
     return ctx;
 }
 
-utils::result::Result<UploadContext> LocationRouting::getUploadContext() const
+Result<UploadContext> LocationRouting::getUploadContext() const
 {
-    utils::result::Result<void> v =
-        validateActionIs_(STORE_BODY, "getUploadContext");
+    Result<void> v = validateActionIs_(STORE_BODY, "getUploadContext");
     if (v.isError())
     {
-        return utils::result::Result<UploadContext>(
+        return Result<UploadContext>(
             utils::result::ERROR, UploadContext(), v.getErrorMessage());
     }
     if (!location_)
     {
-        return utils::result::Result<UploadContext>(
+        return Result<UploadContext>(
             utils::result::ERROR, UploadContext(), "no location matched");
     }
     if (!location_->hasUploadStore())
     {
-        return utils::result::Result<UploadContext>(
+        return Result<UploadContext>(
             utils::result::ERROR, UploadContext(), "upload_store is not set");
     }
 
@@ -246,7 +243,7 @@ utils::result::Result<UploadContext> LocationRouting::getUploadContext() const
         location_->removePathPatternFromPath(request_ctx_.getRequestPath());
     if (rel.empty() || rel[rel.size() - 1] == '/')
     {
-        return utils::result::Result<UploadContext>(
+        return Result<UploadContext>(
             utils::result::ERROR, UploadContext(), "upload target is invalid");
     }
     if (rel[0] != '/')
@@ -254,11 +251,11 @@ utils::result::Result<UploadContext> LocationRouting::getUploadContext() const
         rel = "/" + rel;
     }
 
-    utils::result::Result<utils::path::PhysicalPath> dest =
+    Result<utils::path::PhysicalPath> dest =
         utils::path::resolvePhysicalPathUnderRoot(ctx.store_root, rel, true);
     if (dest.isError())
     {
-        return utils::result::Result<UploadContext>(
+        return Result<UploadContext>(
             utils::result::ERROR, UploadContext(), dest.getErrorMessage());
     }
     ctx.destination_path = dest.unwrap();
@@ -267,11 +264,11 @@ utils::result::Result<UploadContext> LocationRouting::getUploadContext() const
     return ctx;
 }
 
-utils::result::Result<unsigned long> LocationRouting::clientMaxBodySize() const
+Result<unsigned long> LocationRouting::clientMaxBodySize() const
 {
     if (!location_)
     {
-        return utils::result::Result<unsigned long>(
+        return Result<unsigned long>(
             utils::result::ERROR, 0, "no location matched");
     }
     return location_->clientMaxBodySize();
@@ -289,21 +286,19 @@ bool LocationRouting::tryGetErrorPagePath(
     return false;
 }
 
-utils::result::Result<utils::path::PhysicalPath>
+Result<utils::path::PhysicalPath>
 LocationRouting::resolvePhysicalPathUnderRootOrError(
     bool allow_nonexistent_leaf) const
 {
     if (status_.isError())
     {
-        return utils::result::Result<utils::path::PhysicalPath>(
-            utils::result::ERROR, utils::path::PhysicalPath(),
-            "routing status is error");
+        return Result<utils::path::PhysicalPath>(utils::result::ERROR,
+            utils::path::PhysicalPath(), "routing status is error");
     }
     if (!location_)
     {
-        return utils::result::Result<utils::path::PhysicalPath>(
-            utils::result::ERROR, utils::path::PhysicalPath(),
-            "no location matched");
+        return Result<utils::path::PhysicalPath>(utils::result::ERROR,
+            utils::path::PhysicalPath(), "no location matched");
     }
 
     std::string uri_path =
@@ -321,7 +316,7 @@ LocationRouting::resolvePhysicalPathUnderRootOrError(
         location_->rootDir(), uri_path, allow_nonexistent_leaf);
 }
 
-utils::result::Result<utils::path::PhysicalPath>
+Result<utils::path::PhysicalPath>
 LocationRouting::resolvePhysicalPathUnderRootOrError() const
 {
     return resolvePhysicalPathUnderRootOrError(false);
@@ -349,8 +344,7 @@ std::string LocationRouting::toString_(const http::HttpStatus& status)
     return oss.str();
 }
 
-utils::result::Result<void> LocationRouting::decideAction_(
-    const http::HttpRequest& req)
+Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
 {
     next_action_ = RESPOND_ERROR;
     redirect_location_.clear();
@@ -379,7 +373,7 @@ utils::result::Result<void> LocationRouting::decideAction_(
         {
             next_action_ = REDIRECT_EXTERNAL;
         }
-        return utils::result::Result<void>();
+        return Result<void>();
     }
 
     // client_max_body_size: Content-Length がある場合だけ先に判定する。
@@ -387,7 +381,7 @@ utils::result::Result<void> LocationRouting::decideAction_(
     unsigned long max_body = location_->clientMaxBodySize();
     if (req.hasHeader("Content-Length"))
     {
-        utils::result::Result<const std::vector<std::string>&> h =
+        Result<const std::vector<std::string>&> h =
             req.getHeader("Content-Length");
         if (h.isOk() && !h.unwrap().empty())
         {
@@ -420,7 +414,7 @@ utils::result::Result<void> LocationRouting::decideAction_(
             request_method_ == http::HttpMethod::PUT))
     {
         next_action_ = STORE_BODY;
-        return utils::result::Result<void>();
+        return Result<void>();
     }
 
     // autoindex (directory URI + autoindex enabled + no index candidates)
@@ -432,7 +426,7 @@ utils::result::Result<void> LocationRouting::decideAction_(
         if (location_->isAutoIndexEnabled() && cands.empty())
         {
             next_action_ = SERVE_AUTOINDEX;
-            return utils::result::Result<void>();
+            return Result<void>();
         }
     }
 
@@ -447,20 +441,20 @@ utils::result::Result<void> LocationRouting::decideAction_(
         if (end != std::string::npos)
         {
             next_action_ = RUN_CGI;
-            return utils::result::Result<void>();
+            return Result<void>();
         }
     }
 
     next_action_ = SERVE_STATIC;
-    return utils::result::Result<void>();
+    return Result<void>();
 }
 
-utils::result::Result<void> LocationRouting::applyErrorPageOrRespondError_()
+Result<void> LocationRouting::applyErrorPageOrRespondError_()
 {
     if (!status_.isError())
     {
         next_action_ = SERVE_STATIC;
-        return utils::result::Result<void>();
+        return Result<void>();
     }
 
     next_action_ = RESPOND_ERROR;
@@ -469,43 +463,41 @@ utils::result::Result<void> LocationRouting::applyErrorPageOrRespondError_()
     std::string target;
     if (!tryGetErrorPagePath(status_, &target))
     {
-        return utils::result::Result<void>();
+        return Result<void>();
     }
     if (!target.empty() && target[0] == '/')
     {
         redirect_location_ = target;
         next_action_ = REDIRECT_INTERNAL;
-        return utils::result::Result<void>();
+        return Result<void>();
     }
     // 外部URLエラーリダイレクトは採用しない（RESPOND_ERRORにフォールバック）
-    return utils::result::Result<void>();
+    return Result<void>();
 }
 
-utils::result::Result<void> LocationRouting::validateActionIs_(
+Result<void> LocationRouting::validateActionIs_(
     ActionType expected, const std::string& api_name) const
 {
     if (next_action_ != expected)
     {
-        return utils::result::Result<void>(utils::result::ERROR,
+        return Result<void>(utils::result::ERROR,
             api_name + " is only valid for a different action");
     }
-    return utils::result::Result<void>();
+    return Result<void>();
 }
 
-utils::result::Result<void>
-LocationRouting::validateActionIsOneOfStaticOrAutoindex_(
+Result<void> LocationRouting::validateActionIsOneOfStaticOrAutoindex_(
     const std::string& api_name) const
 {
     if (next_action_ != SERVE_STATIC && next_action_ != SERVE_AUTOINDEX)
     {
-        return utils::result::Result<void>(utils::result::ERROR,
+        return Result<void>(utils::result::ERROR,
             api_name + " is only valid for SERVE_STATIC/SERVE_AUTOINDEX");
     }
-    return utils::result::Result<void>();
+    return Result<void>();
 }
 
-utils::result::Result<http::HttpRequest>
-LocationRouting::buildInternalRedirectRequest_(
+Result<http::HttpRequest> LocationRouting::buildInternalRedirectRequest_(
     const std::string& uri_path) const
 {
     http::HttpRequest req;
@@ -529,10 +521,10 @@ LocationRouting::buildInternalRedirectRequest_(
     {
         buf.push_back(static_cast<utils::Byte>(raw[i]));
     }
-    utils::result::Result<size_t> parsed = req.parse(buf);
+    Result<size_t> parsed = req.parse(buf);
     if (parsed.isError() || !req.isParseComplete())
     {
-        return utils::result::Result<http::HttpRequest>(utils::result::ERROR,
+        return Result<http::HttpRequest>(utils::result::ERROR,
             http::HttpRequest(), "failed to build internal redirect request");
     }
     return req;

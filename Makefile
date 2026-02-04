@@ -73,6 +73,19 @@ TEST_PROD_SRCS ?= \
 	srcs/server/session/fd/tcp_socket/tcp_listen_socket_fd.cpp \
 		srcs/server/session/fd_session/http_session/body_source.cpp \
 		srcs/server/session/fd_session/http_session.cpp \
+		srcs/server/session/fd_session/http_session/http_session_watch.cpp \
+		srcs/server/session/fd_session/http_session/http_session_cgi.cpp \
+		srcs/server/session/fd_session/http_session/http_session_helpers.cpp \
+		srcs/server/session/fd_session/http_session/http_session_event.cpp \
+		srcs/server/session/fd_session/http_session/http_session_event_recv.cpp \
+		srcs/server/session/fd_session/http_session/http_session_event_send.cpp \
+		srcs/server/session/fd_session/http_session/http_session_event_cgi.cpp \
+		srcs/server/session/fd_session/http_session/http_session_prepare.cpp \
+		srcs/server/session/fd_session/http_session/http_session_redirect.cpp \
+		srcs/server/session/fd_session/http_session/http_session_cgi_notify.cpp \
+		srcs/server/session/fd_session/http_session/http_session_cgi_notify_local_redirect.cpp \
+		srcs/server/session/fd_session/http_session/http_session_cgi_notify_normal.cpp \
+		srcs/server/session/fd_session/http_session/http_session_cgi_notify_error.cpp \
 	srcs/server/session/fd_session/cgi_session.cpp \
 		srcs/server/session/fd_session/http_session/http_response_writer.cpp \
 	srcs/server/session/fd_session/http_session/body_store.cpp \

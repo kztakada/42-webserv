@@ -188,7 +188,7 @@ Result<void> VirtualServerConf::setRootDir(const std::string& root_dir_str)
     {
         return Result<void>(ERROR, "root path contains NUL");
     }
-    utils::result::Result<utils::path::PhysicalPath> resolved =
+    Result<utils::path::PhysicalPath> resolved =
         utils::path::PhysicalPath::resolve(root_dir_str);
     if (resolved.isError())
     {

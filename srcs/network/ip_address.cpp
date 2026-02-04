@@ -6,11 +6,11 @@
 
 namespace
 {
+using namespace utils::result;
 
-utils::result::Result<IPAddress> makeInvalidIpResult()
+Result<IPAddress> makeInvalidIpResult()
 {
-    return utils::result::Result<IPAddress>(
-        utils::result::ERROR, "ip address is invalid");
+    return Result<IPAddress>(utils::result::ERROR, "ip address is invalid");
 }
 
 }  // namespace
@@ -35,13 +35,11 @@ IPAddress::IPAddress(const sockaddr_in& addr)
 
 IPAddress IPAddress::ipv4Any() { return IPAddress("0.0.0.0"); }
 
-utils::result::Result<IPAddress> IPAddress::parseIpv4Numeric(
-    const std::string& ip_str)
+Result<IPAddress> IPAddress::parseIpv4Numeric(const std::string& ip_str)
 {
     if (ip_str.empty())
     {
-        return utils::result::Result<IPAddress>(
-            utils::result::ERROR, "ip address is empty");
+        return Result<IPAddress>(utils::result::ERROR, "ip address is empty");
     }
 
     unsigned int octets[4];

@@ -14,6 +14,7 @@
 
 namespace server
 {
+using utils::result::Result;
 
 struct Listen
 {
@@ -42,19 +43,16 @@ struct VirtualServerConf
     VirtualServerConf();
 
     // --- 仕様チェック込みの登録API（パーサーから利用する想定） ---
-    utils::result::Result<void> appendListen(
+    Result<void> appendListen(
         const std::string& listen_ip_str, const std::string& listen_port_str);
-    utils::result::Result<void> appendListen(const Listen& listen);
-    utils::result::Result<void> appendServerName(
-        const std::string& server_name_str);
-    utils::result::Result<void> setRootDir(const std::string& root_dir_str);
-    utils::result::Result<void> appendIndexPage(
-        const std::string& filename_str);
-    utils::result::Result<void> setClientMaxBodySize(unsigned long size);
-    utils::result::Result<void> appendErrorPage(
+    Result<void> appendListen(const Listen& listen);
+    Result<void> appendServerName(const std::string& server_name_str);
+    Result<void> setRootDir(const std::string& root_dir_str);
+    Result<void> appendIndexPage(const std::string& filename_str);
+    Result<void> setClientMaxBodySize(unsigned long size);
+    Result<void> appendErrorPage(
         http::HttpStatus status, const std::string& page_url_str);
-    utils::result::Result<void> appendLocation(
-        const LocationDirectiveConf& location);
+    Result<void> appendLocation(const LocationDirectiveConf& location);
 
     // 起動時に bind() する listen のリストを返す（重複解決済み）
     // - 完全同一 (IP:port) は 1つに畳み込む

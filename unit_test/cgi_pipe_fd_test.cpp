@@ -12,6 +12,7 @@
 
 namespace
 {
+using utils::result::Result;
 
 class UniqueFd
 {
@@ -82,7 +83,7 @@ TEST(CgiPipeFd, ExecutesChildAndPipesStdIO)
     args.push_back("-c");
     args.push_back("cat");
 
-    utils::result::Result<server::CgiSpawnResult> r =
+    Result<server::CgiSpawnResult> r =
         server::CgiPipeFd::Execute("/bin/sh", args, env, "");
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
@@ -121,7 +122,7 @@ TEST(CgiPipeFd, PassesEnvironmentVariablesToChild)
     args.push_back("-c");
     args.push_back("printf %s \"$FOO\"");
 
-    utils::result::Result<server::CgiSpawnResult> r =
+    Result<server::CgiSpawnResult> r =
         server::CgiPipeFd::Execute("/bin/sh", args, env, "");
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 

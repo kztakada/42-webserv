@@ -7,6 +7,8 @@
 #include "utils/path.hpp"
 #include "utils/result.hpp"
 
+using utils::result::Result;
+
 TEST(LocationDirectiveConf, DefaultsAreValid)
 {
     server::LocationDirectiveConf conf;
@@ -21,7 +23,7 @@ TEST(LocationDirectiveConf, DefaultsAreValid)
 TEST(LocationDirectiveConf, InvalidWhenBodySizeExceedsIntMax)
 {
     server::LocationDirectiveConf conf;
-    utils::result::Result<void> r =
+    Result<void> r =
         conf.setClientMaxBodySize(static_cast<unsigned long>(INT_MAX) + 1ul);
     EXPECT_TRUE(r.isError());
     EXPECT_TRUE(conf.isValid());
@@ -31,8 +33,7 @@ TEST(LocationDirectiveConf, InvalidWhenBodySizeExceedsIntMax)
 TEST(LocationDirectiveConf, CgiExtensionsMustHaveNonEmptyKeysAndValues)
 {
     server::LocationDirectiveConf conf;
-    utils::result::Result<void> r =
-        conf.appendCgiExtension(".py", "/usr/bin/python3");
+    Result<void> r = conf.appendCgiExtension(".py", "/usr/bin/python3");
     EXPECT_TRUE(r.isOk());
     EXPECT_TRUE(conf.isValid());
     EXPECT_EQ("/usr/bin/python3", conf.cgi_extensions[".py"].str());
@@ -49,8 +50,7 @@ TEST(LocationDirectiveConf, CgiExtensionsMustHaveNonEmptyKeysAndValues)
 TEST(LocationDirectiveConf, PhysicalPathsAreResolvedAndNormalized)
 {
     server::LocationDirectiveConf conf;
-    utils::result::Result<std::string> cwd =
-        utils::path::getCurrentWorkingDirectory();
+    Result<std::string> cwd = utils::path::getCurrentWorkingDirectory();
     ASSERT_TRUE(cwd.isOk());
 
     EXPECT_TRUE(conf.setRootDir("./www//html").isOk());
@@ -132,8 +132,7 @@ TEST(LocationDirectiveConf, RejectsNulInPathTokens)
 TEST(LocationDirectiveConf, RedirectStatusMustBeRedirectionWhenUrlIsSet)
 {
     server::LocationDirectiveConf conf;
-    utils::result::Result<void> r =
-        conf.setRedirect(http::HttpStatus::OK, "/new-page");
+    Result<void> r = conf.setRedirect(http::HttpStatus::OK, "/new-page");
     EXPECT_TRUE(r.isError());
     EXPECT_TRUE(conf.isValid());
 
@@ -189,8 +188,7 @@ TEST(VirtualServerConf, BecomesValidWithListenPortRootAndValidLocations)
 {
     server::VirtualServerConf conf;
     EXPECT_TRUE(conf.appendListen("", "8080").isOk());
-    utils::result::Result<std::string> cwd =
-        utils::path::getCurrentWorkingDirectory();
+    Result<std::string> cwd = utils::path::getCurrentWorkingDirectory();
     ASSERT_TRUE(cwd.isOk());
 
     EXPECT_TRUE(conf.setRootDir("./www//html").isOk());

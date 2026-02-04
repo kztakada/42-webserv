@@ -1,0 +1,27 @@
+#include "http/cgi_response.hpp"
+#include "server/session/fd_session/cgi_session.hpp"
+#include "server/session/fd_session/http_session.hpp"
+
+namespace server
+{
+
+using namespace utils::result;
+
+Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
+{
+    const http::CgiResponse& cr = cgi.response();
+    const http::CgiResponseType t = cr.getResponseType();
+
+    if (t == http::kLocalRedirect)
+        return handleCgiHeadersReadyLocalRedirect_(cgi, cr);
+
+    return handleCgiHeadersReadyNormal_(cgi, cr);
+}
+
+Result<void> HttpSession::onCgiError(
+    CgiSession& cgi, const std::string& message)
+{
+    return handleCgiError_(cgi, message);
+}
+
+}  // namespace server

@@ -7,6 +7,8 @@
 
 #include "utils/result.hpp"
 
+using namespace utils::result;
+
 class IPAddress
 {
    public:
@@ -17,8 +19,7 @@ class IPAddress
 
     // 数値IPv4の文字列表現を検証してIPAddressを生成する。
     // 例: "127.0.0.1" はOK、"localhost" や "999.0.0.1" はERROR。
-    static utils::result::Result<IPAddress> parseIpv4Numeric(
-        const std::string& ip_str);
+    static Result<IPAddress> parseIpv4Numeric(const std::string& ip_str);
 
     bool isWildcard() const;
 

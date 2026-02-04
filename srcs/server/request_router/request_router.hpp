@@ -23,6 +23,7 @@
 
 namespace server
 {
+using utils::result::Result;
 
 class RequestRouter
 {
@@ -33,9 +34,8 @@ class RequestRouter
     // リクエストに対応するLocationConfを取得
     // @return 内部エラーは Result(ERROR, msg)
     //         該当ロケーションがない場合は OK で location == NULL
-    utils::result::Result<LocationRouting> route(
-        const http::HttpRequest& request, const IPAddress& server_ip,
-        const PortType& server_port) const;
+    Result<LocationRouting> route(const http::HttpRequest& request,
+        const IPAddress& server_ip, const PortType& server_port) const;
 
    private:
     std::vector<VirtualServer> servers_;

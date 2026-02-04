@@ -6,6 +6,8 @@
 
 #include "utils/path.hpp"
 
+using utils::result::Result;
+
 TEST(ConfigParser, ParseMinimalServerFromData)
 {
     const std::string conf =
@@ -15,8 +17,7 @@ TEST(ConfigParser, ParseMinimalServerFromData)
         "  location / { }\n"
         "}\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
     server::ServerConfig cfg = r.unwrap();
@@ -26,8 +27,7 @@ TEST(ConfigParser, ParseMinimalServerFromData)
     ASSERT_EQ(1u, s.listens.size());
     EXPECT_EQ("8080", s.listens[0].port.toString());
 
-    utils::result::Result<std::string> cwd =
-        utils::path::getCurrentWorkingDirectory();
+    Result<std::string> cwd = utils::path::getCurrentWorkingDirectory();
     ASSERT_TRUE(cwd.isOk());
     EXPECT_EQ(cwd.unwrap() + "/www/html", s.root_dir.str());
 
@@ -44,8 +44,7 @@ TEST(ConfigParser, SupportsComments)
         "  root ./www/html;\n"
         "}\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
     ASSERT_EQ(1u, r.unwrap().servers.size());
 }
@@ -56,8 +55,7 @@ TEST(ConfigParser, DuplicateServerNameOnSamePortIsError)
         "server { listen 8080; server_name example.com; root /var/www; }\n"
         "server { listen 8080; server_name example.com; root /var/www2; }\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     EXPECT_TRUE(r.isError());
 }
 
@@ -67,8 +65,7 @@ TEST(ConfigParser, SameServerNameOnDifferentPortIsOk)
         "server { listen 8080; server_name example.com; root /var/www; }\n"
         "server { listen 8081; server_name example.com; root /var/www2; }\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
     ASSERT_EQ(2u, r.unwrap().servers.size());
 }
@@ -79,8 +76,7 @@ TEST(ConfigParser, ServerNameWithPortIsError)
         "server { listen 8080; server_name example.com:8080; root /var/www; "
         "}\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     EXPECT_TRUE(r.isError());
 }
 
@@ -93,8 +89,7 @@ TEST(ConfigParser, ParsesClientMaxBodySizeWithSuffix)
         "  client_max_body_size 10M;\n"
         "}\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
     server::ServerConfig cfg = r.unwrap();
@@ -118,8 +113,7 @@ TEST(ConfigParser, ParseLocationDirectives)
         "  }\n"
         "}\n";
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseData(conf);
+    Result<server::ServerConfig> r = server::ConfigParser::parseData(conf);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
     server::ServerConfig cfg = r.unwrap();
@@ -133,8 +127,7 @@ TEST(ConfigParser, ParseLocationDirectives)
     EXPECT_EQ(http::HttpStatus::MOVED_PERMANENTLY, loc.redirect_status);
     EXPECT_EQ("/new-page.html", loc.redirect_url);
 
-    utils::result::Result<std::string> cwd =
-        utils::path::getCurrentWorkingDirectory();
+    Result<std::string> cwd = utils::path::getCurrentWorkingDirectory();
     ASSERT_TRUE(cwd.isOk());
     ASSERT_EQ(1u, loc.cgi_extensions.size());
     EXPECT_EQ(cwd.unwrap() + "/tester/ubuntu_cgi_tester",
@@ -151,8 +144,7 @@ TEST(ConfigParser, ParseFile)
     ofs << conf;
     ofs.close();
 
-    utils::result::Result<server::ServerConfig> r =
-        server::ConfigParser::parseFile(path);
+    Result<server::ServerConfig> r = server::ConfigParser::parseFile(path);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
     ASSERT_EQ(1u, r.unwrap().servers.size());
 }

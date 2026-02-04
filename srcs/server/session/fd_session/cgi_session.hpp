@@ -26,6 +26,36 @@ class CgiSession : public FdSession
    public:
     static const long kDefaultTimeoutSec = 5;
 
+    CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
+        int request_body_fd, HttpSession* parent,
+        FdSessionController& controller);
+
+    virtual ~CgiSession();  // ここで確実に kill(pid_) と close を行う
+
+    virtual Result<void> handleEvent(const FdEvent& event);
+    virtual bool isComplete() const;
+
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
+
+    HttpSession* getParentSession() const { return parent_session_; }
+
+    bool isHeadersComplete() const { return headers_complete_; }
+    const http::CgiResponse& response() const { return cgi_response_; }
+
+    // stdout を HttpSession 側に移譲し、BodySource
+    // でストリーミングするために使う。 以後この CgiSession は stdout
+    // を読まない。
+    int releaseStdoutFd() { return pipe_out_.release(); }
+
+    // ヘッダ終端と同じ read で先読みした body を取り出す（1回限り）。
+    std::vector<utils::Byte> takePrefetchedBody();
+
+    int stdinFd() const { return pipe_in_.getFd(); }
+    int stdoutFd() const { return pipe_out_.getFd(); }
+    int stderrFd() const { return pipe_err_.getFd(); }
+
+    pid_t pid() const { return pid_; }
+
    private:
     // --- 子プロセス管理 ---
     pid_t pid_;  // CGIプロセスのID (waitpid/kill用)
@@ -61,62 +91,6 @@ class CgiSession : public FdSession
     // ヘッダ終端と同じ read() で先読みしてしまった body の断片
     std::vector<utils::Byte> prefetched_body_;
 
-   public:
-    CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
-        int request_body_fd, HttpSession* parent,
-        FdSessionController& controller)
-        : FdSession(controller, kDefaultTimeoutSec),
-          pid_(pid),
-          pipe_in_(in_fd),
-          pipe_out_(out_fd),
-          pipe_err_(err_fd),
-          stdin_buffer_(),
-          stdout_buffer_(),
-          stderr_buffer_(),
-          cgi_response_(),
-          parent_session_(parent),
-          request_body_fd_(request_body_fd),
-          is_stdout_eof_(false),
-          is_stderr_eof_(false),
-          input_complete_(false),
-          headers_complete_(false),
-          error_notified_to_parent_(false),
-          prefetched_body_()
-    {
-        updateLastActiveTime();
-    }
-    virtual ~CgiSession();  // ここで確実に kill(pid_) と close を行う
-
-    virtual Result<void> handleEvent(const FdEvent& event);
-    virtual bool isComplete() const;
-
-    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
-
-    HttpSession* getParentSession() const { return parent_session_; }
-
-    bool isHeadersComplete() const { return headers_complete_; }
-    const http::CgiResponse& response() const { return cgi_response_; }
-
-    // stdout を HttpSession 側に移譲し、BodySource
-    // でストリーミングするために使う。 以後この CgiSession は stdout
-    // を読まない。
-    int releaseStdoutFd() { return pipe_out_.release(); }
-
-    // ヘッダ終端と同じ read で先読みした body を取り出す（1回限り）。
-    std::vector<utils::Byte> takePrefetchedBody()
-    {
-        std::vector<utils::Byte> out;
-        out.swap(prefetched_body_);
-        return out;
-    }
-
-    int stdinFd() const { return pipe_in_.getFd(); }
-    int stdoutFd() const { return pipe_out_.getFd(); }
-    int stderrFd() const { return pipe_err_.getFd(); }
-
-    pid_t pid() const { return pid_; }
-
-   private:
     CgiSession();
     CgiSession(const CgiSession& rhs);
     CgiSession& operator=(const CgiSession& rhs);

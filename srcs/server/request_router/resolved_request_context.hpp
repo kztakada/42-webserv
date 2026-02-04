@@ -9,13 +9,14 @@
 
 namespace server
 {
+using utils::result::Result;
 
 class ResolvedRequestContext
 {
    public:
     ResolvedRequestContext();
 
-    static utils::result::Result<ResolvedRequestContext> create(
+    static Result<ResolvedRequestContext> create(
         const http::HttpRequest& request);
 
     // create() に失敗した場合でも BAD_REQUEST のレスポンス構築に必要な
@@ -32,7 +33,7 @@ class ResolvedRequestContext
     // RFC 3986 Section 5.2.4 (Remove Dot Segments) 相当
     // - '.' と '..' を解決する
     // - ルートより上に出ようとしたら ERROR
-    utils::result::Result<void> resolveDotSegmentsOrError();
+    Result<void> resolveDotSegmentsOrError();
 
    private:
     const http::HttpRequest* request_;

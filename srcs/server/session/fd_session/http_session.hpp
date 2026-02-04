@@ -18,6 +18,11 @@
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
+namespace http
+{
+class CgiResponse;
+}
+
 namespace server
 {
 using namespace utils::result;
@@ -36,6 +41,25 @@ class HttpSession : public FdSession
     // テスト用
     const HttpRequest& request() const { return request_; }
     const HttpResponse& response() const { return response_; }
+
+    HttpSession(int fd, const SocketAddress& server_addr,
+        const SocketAddress& client_addr, FdSessionController& controller,
+        const RequestRouter& router);
+    virtual ~HttpSession();
+
+    virtual Result<void> handleEvent(const FdEvent& event);
+    virtual bool isComplete() const;
+
+    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
+
+    // CgiSession からの通知: CGI stdout のヘッダが確定した
+    Result<void> onCgiHeadersReady(CgiSession& cgi);
+
+    // CgiSession からの通知: CGI がヘッダ確定前に失敗した
+    Result<void> onCgiError(CgiSession& cgi, const std::string& message);
+
+    HttpHandler& handler() { return handler_; }
+    const HttpHandler& handler() const { return handler_; }
 
    private:
     // --- プロトコル解析・構築 ---
@@ -72,63 +96,9 @@ class HttpSession : public FdSession
     CgiSession* active_cgi_session_;  // 実行中のCGI（なければNULL）
 
     // 簡易的な状態管理（実際のHTTPリクエスト/レスポンス処理は省略）
-    bool has_request_;
-    bool has_response_;
-    bool connection_close_;
-    bool waiting_for_cgi_;
+    bool peer_closed_;
+    bool should_close_connection_;
 
-    bool is_complete_;
-
-   public:
-    HttpSession(int fd, const SocketAddress& server_addr,
-        const SocketAddress& client_addr, FdSessionController& controller,
-        const RequestRouter& router)
-        : FdSession(controller, kDefaultTimeoutSec),
-          request_(),
-          response_(),
-          socket_fd_(fd, server_addr, client_addr),
-          router_(router),
-          handler_(request_, response_, router, socket_fd_.getServerIp(),
-              socket_fd_.getServerPort(), this),
-          processor_(
-              router_, socket_fd_.getServerIp(), socket_fd_.getServerPort()),
-          body_source_(NULL),
-          response_writer_(NULL),
-          recv_buffer_(),
-          send_buffer_(),
-          socket_watch_read_(false),
-          socket_watch_write_(false),
-          state_(RECV_REQUEST),
-          redirect_count_(0),
-          active_cgi_session_(NULL),
-          has_request_(false),
-          has_response_(false),
-          connection_close_(false),
-          waiting_for_cgi_(false),
-          is_complete_(false)
-    {
-        updateLastActiveTime();
-    };
-    virtual ~HttpSession();
-
-    virtual Result<void> handleEvent(const FdEvent& event);
-    virtual bool isComplete() const;
-
-    virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
-
-    // CgiSession からの通知: CGI stdout のヘッダが確定した
-    Result<void> onCgiHeadersReady(CgiSession& cgi);
-
-    // CgiSession からの通知: CGI がヘッダ確定前に失敗した
-    Result<void> onCgiError(CgiSession& cgi, const std::string& message);
-
-    bool isWaitingForCgi() const;
-    void setWaitingForCgi(bool waiting);
-
-    HttpHandler& handler() { return handler_; }
-    const HttpHandler& handler() const { return handler_; }
-
-   private:
     HttpSession();
     HttpSession(const HttpSession& rhs);
     HttpSession& operator=(const HttpSession& rhs);
@@ -147,6 +117,45 @@ class HttpSession : public FdSession
     Result<void> prepareResponseOrCgi_();
 
     Result<void> updateSocketWatches_();
+
+    // RequestProcessor::Output を使って body_source_ / response_writer_
+    // を差し替える。 既存の writer/body_source は必要に応じて破棄する。
+    void installBodySourceAndWriter_(BodySource* body_source);
+
+    // processError を試み、失敗したら setSimpleErrorResponse_
+    // で最低限のヘッダだけ作る。 fallback の場合 out->body_source は NULL
+    // になる。
+    Result<void> buildErrorOutput_(
+        http::HttpStatus status, RequestProcessor::Output* out);
+
+    // handler_.onRequestReady() を実行し、失敗時は 400
+    // の最小レスポンスを用意する。 どちらの場合でも response_ の HTTP version
+    // は request_ に合わせて設定する。
+    Result<void> prepareRequestReadyOrBadRequest_();
+
+    // RequestProcessor::process を実行し、失敗したら 500 を用意する。
+    // この場合は接続を close する方針なので out->should_close_connection を
+    // true にする。
+    Result<void> buildProcessorOutputOrServerError_(
+        RequestProcessor::Output* out);
+
+    // ---- internal helpers ----
+    static http::HttpResponseEncoder::Options makeEncoderOptions_(
+        const http::HttpRequest& request);
+    static Result<void> setSimpleErrorResponse_(
+        http::HttpResponse& response, http::HttpStatus status);
+
+    // ---- event handlers (state-based) ----
+    Result<void> handleExecuteCgiEvent_(const FdEvent& event);
+    Result<void> handleRecvRequestReadEvent_(const FdEvent& event);
+    Result<void> handleSendResponseWriteEvent_(const FdEvent& event);
+
+    // ---- cgi notify handlers (split by responsibility) ----
+    Result<void> handleCgiHeadersReadyLocalRedirect_(
+        CgiSession& cgi, const http::CgiResponse& cr);
+    Result<void> handleCgiHeadersReadyNormal_(
+        CgiSession& cgi, const http::CgiResponse& cr);
+    Result<void> handleCgiError_(CgiSession& cgi, const std::string& message);
 };
 
 }  // namespace server

@@ -13,6 +13,8 @@
 #include "server/config/virtual_server_conf.hpp"
 #include "server/request_router/request_router.hpp"
 
+using utils::result::Result;
+
 static server::ServerConfig makeServerConfig(unsigned long client_max_body_size)
 {
     server::ServerConfig config;
@@ -51,10 +53,9 @@ TEST(HttpHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
     server::ServerConfig config = makeServerConfig(0);
     server::RequestRouter router(config);
 
-    utils::result::Result<IPAddress> ip =
-        IPAddress::parseIpv4Numeric("127.0.0.1");
+    Result<IPAddress> ip = IPAddress::parseIpv4Numeric("127.0.0.1");
     ASSERT_TRUE(ip.isOk());
-    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
     http::HttpRequest request;
@@ -76,13 +77,13 @@ TEST(HttpHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
         "0123456789";
     recv.append(raw);
 
-    utils::result::Result<void> r = handler.consumeFromRecvBuffer(recv);
+    Result<void> r = handler.consumeFromRecvBuffer(recv);
     ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
     EXPECT_TRUE(request.isParseComplete());
     EXPECT_EQ(request.getDecodedBodyBytes(), static_cast<size_t>(10));
 
-    utils::result::Result<int> fd = handler.bodyStore().openForRead();
+    Result<int> fd = handler.bodyStore().openForRead();
     ASSERT_TRUE(fd.isOk()) << fd.getErrorMessage();
     std::string stored;
     mustReadAll(fd.unwrap(), &stored);
@@ -95,10 +96,9 @@ TEST(HttpHandler, RejectsBodyOverLocationMaxBodyBytes)
     server::ServerConfig config = makeServerConfig(3);
     server::RequestRouter router(config);
 
-    utils::result::Result<IPAddress> ip =
-        IPAddress::parseIpv4Numeric("127.0.0.1");
+    Result<IPAddress> ip = IPAddress::parseIpv4Numeric("127.0.0.1");
     ASSERT_TRUE(ip.isOk());
-    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
     http::HttpRequest request;
@@ -120,7 +120,7 @@ TEST(HttpHandler, RejectsBodyOverLocationMaxBodyBytes)
         "ABCD";
     recv.append(raw);
 
-    utils::result::Result<void> r = handler.consumeFromRecvBuffer(recv);
+    Result<void> r = handler.consumeFromRecvBuffer(recv);
     ASSERT_TRUE(r.isError());
 
     EXPECT_TRUE(request.hasParseError());

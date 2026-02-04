@@ -16,15 +16,6 @@ const int kNoTimeoutSeconds = 0;
 // リスナーセッション：新規接続を受け付ける
 class ListenerSession : public FdSession
 {
-   private:
-    // --- ファイル記述子 (RAIIオブジェクト) ---
-    TcpListenSocketFd* listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
-
-    // --- 制御と外部連携 ---
-    const RequestRouter& router_;  // Serverから渡される参照、HttpSession生成用
-
-    void acceptNewConnection();
-
    public:
     explicit ListenerSession(TcpListenSocketFd* listen_fd,
         FdSessionController& controller, const RequestRouter& router);
@@ -39,6 +30,14 @@ class ListenerSession : public FdSession
     virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
 
    private:
+    // --- ファイル記述子 (RAIIオブジェクト) ---
+    TcpListenSocketFd* listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
+
+    // --- 制御と外部連携 ---
+    const RequestRouter& router_;  // Serverから渡される参照、HttpSession生成用
+
+    void acceptNewConnection();
+
     ListenerSession();
     ListenerSession(const ListenerSession& rhs);
     ListenerSession& operator=(const ListenerSession& rhs);

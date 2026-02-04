@@ -11,6 +11,7 @@
 
 namespace server
 {
+using utils::result::Result;
 
 static std::string extractExtension_(const std::string& path)
 {
@@ -193,7 +194,7 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         // --- Static / Autoindex ---
         // filesystem を見て最終決定する。
 
-        utils::result::Result<utils::path::PhysicalPath> resolved =
+        Result<utils::path::PhysicalPath> resolved =
             route.resolvePhysicalPathUnderRootOrError();
         if (resolved.isError())
         {

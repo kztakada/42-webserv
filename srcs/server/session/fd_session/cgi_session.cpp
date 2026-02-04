@@ -10,6 +10,36 @@
 namespace server
 {
 
+CgiSession::CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
+    int request_body_fd, HttpSession* parent, FdSessionController& controller)
+    : FdSession(controller, kDefaultTimeoutSec),
+      pid_(pid),
+      pipe_in_(in_fd),
+      pipe_out_(out_fd),
+      pipe_err_(err_fd),
+      stdin_buffer_(),
+      stdout_buffer_(),
+      stderr_buffer_(),
+      cgi_response_(),
+      parent_session_(parent),
+      request_body_fd_(request_body_fd),
+      is_stdout_eof_(false),
+      is_stderr_eof_(false),
+      input_complete_(false),
+      headers_complete_(false),
+      error_notified_to_parent_(false),
+      prefetched_body_()
+{
+    updateLastActiveTime();
+}
+
+std::vector<utils::Byte> CgiSession::takePrefetchedBody()
+{
+    std::vector<utils::Byte> out;
+    out.swap(prefetched_body_);
+    return out;
+}
+
 CgiSession::~CgiSession()
 {
     // reactor watch を残したまま delete すると UAF になるため、先に解除する。
@@ -126,12 +156,8 @@ Result<void> CgiSession::fillStdinBufferIfNeeded_()
 
     char buf[4096];
     const ssize_t n = ::read(request_body_fd_, buf, sizeof(buf));
-    if (n < 0)
-    {
-        // 実装規定: read 後の errno 分岐は禁止。
-        // -1 は "今は進めない" として扱う。
+    if (n < 0)  // -1 は "今は進めない" として扱う。
         return Result<void>();
-    }
 
     if (n == 0)
     {
@@ -180,9 +206,7 @@ Result<void> CgiSession::handleStdin_(FdEventType type)
 
     // 送るものがなくなり、body の読み元も EOF なら stdin を閉じる
     if (stdin_buffer_.size() == 0 && request_body_fd_ < 0)
-    {
         closeStdin_();
-    }
 
     return Result<void>();
 }
@@ -241,18 +265,15 @@ Result<void> CgiSession::handleStdout_(FdEventType type)
     if (type != kReadEvent)
         return Result<void>();
 
+    // headers 完了後の stdout は親が BodySource として読む。
     if (headers_complete_)
-    {
-        // headers 完了後の stdout は親が BodySource として読む。
         return Result<void>();
-    }
 
     const ssize_t r = stdout_buffer_.fillFromFd(pipe_out_.getFd());
+
+    // 実装規定: read 後の errno 分岐は禁止。
     if (r < 0)
-    {
-        // 実装規定: read 後の errno 分岐は禁止。
         return Result<void>();
-    }
 
     if (r == 0)
     {
@@ -273,9 +294,7 @@ Result<void> CgiSession::handleStderr_(FdEventType type)
 
     const ssize_t r = stderr_buffer_.fillFromFd(pipe_err_.getFd());
     if (r < 0)
-    {
         return Result<void>();
-    }
 
     if (r == 0)
     {

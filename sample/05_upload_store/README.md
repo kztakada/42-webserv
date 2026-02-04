@@ -77,6 +77,7 @@ bash sample/05_upload_store/curl_upload_store.sh default
 期待:
 - 2MiB → `413`（保存されない）
 - 512KiB → `201`（保存される、サイズ一致）
+- 同名ファイルに再度 POST → `201`（上書きされる）
 
 #### 継承（server: 12M を location が継承）
 

@@ -220,12 +220,16 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   store="sample/05_upload_store/store_default"
   dest_2m="$store/default_2m.bin"
   dest_512k="$store/default_512k.bin"
+  dest_overwrite="$store/overwrite.bin"
   tmp_small=$(mktemp /tmp/webserv_upload_512k_XXXXXX.bin)
   tmp_big=$(mktemp /tmp/webserv_upload_2m_XXXXXX.bin)
+  tmp_overwrite_1=$(mktemp /tmp/webserv_upload_overwrite1_XXXXXX.bin)
+  tmp_overwrite_2=$(mktemp /tmp/webserv_upload_overwrite2_XXXXXX.bin)
 
   cleanup_upload() {
     rm -f "$tmp_small" "$tmp_big"
-    rm -f "$dest_2m" "$dest_512k"
+    rm -f "$tmp_overwrite_1" "$tmp_overwrite_2"
+    rm -f "$dest_2m" "$dest_512k" "$dest_overwrite"
   }
   trap cleanup_upload EXIT
 
@@ -244,6 +248,19 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   size_dest=$(wc -c <"$dest_512k" | tr -d "[:space:]")
   size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
   test "$size_dest" -eq "$size_src"
+
+  # 同名ファイルが既にある場合は上書きされる（2回とも 201）
+  printf "first\n" >"$tmp_overwrite_1"
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_overwrite_1" http://127.0.0.1:18085/upload/overwrite.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_overwrite"
+  test "$(wc -c <"$dest_overwrite" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_overwrite_1" | tr -d "[:space:]")"
+
+  printf "second_is_longer\n" >"$tmp_overwrite_2"
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_overwrite_2" http://127.0.0.1:18085/upload/overwrite.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_overwrite"
+  test "$(wc -c <"$dest_overwrite" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_overwrite_2" | tr -d "[:space:]")"
 '
 
 run_sample sample/05_upload_store/webserv_inherit_server_limit.conf bash -lc '

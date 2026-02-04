@@ -251,7 +251,7 @@ Session では `cgi_meta_variables.hpp` 等のルールに従って env を構�
 - `target_uri_path`: 元の URI
 - `destination_path`: `store_root` 配下として解決した保存先物理パス（末尾ファイルは未存在でも OK）
 - `allow_create_leaf`: 現実装では `true`
-- `allow_overwrite`: `PUT` のときのみ `true`（POST は `false`）
+- `allow_overwrite`: 現実装では `true`（同名ファイルがある場合は上書き）
 
 Session 側は `allow_overwrite` を見て、既存ファイルがある場合の挙動（上書き拒否/許可）を決めます。
 

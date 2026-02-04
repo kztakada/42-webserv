@@ -260,7 +260,8 @@ Result<UploadContext> LocationRouting::getUploadContext() const
     }
     ctx.destination_path = dest.unwrap();
     ctx.allow_create_leaf = true;
-    ctx.allow_overwrite = false;
+    // 仕様変更: 同名ファイルがある場合は上書きする
+    ctx.allow_overwrite = true;
     return ctx;
 }
 

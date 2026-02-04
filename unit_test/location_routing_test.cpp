@@ -369,7 +369,7 @@ TEST(LocationRouting, UploadStoreSelectsStoreBodyAndReturnsContext)
     EXPECT_EQ(up.unwrap().store_root.str(), store);
     EXPECT_EQ(up.unwrap().destination_path.str(), store + "/file.txt");
     EXPECT_TRUE(up.unwrap().allow_create_leaf);
-    EXPECT_FALSE(up.unwrap().allow_overwrite);
+    EXPECT_TRUE(up.unwrap().allow_overwrite);
 }
 
 TEST(LocationRouting, AutoIndexContextContainsDirectoryPhysicalPath)

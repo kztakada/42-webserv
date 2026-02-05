@@ -80,7 +80,7 @@ run_sample sample/02_error_page/webserv.conf bash -lc '
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "hello from sample/02_error_page"
 
-  r=$(curl -sS -i -X POST http://127.0.0.1:18082/hello.txt)
+  r=$(curl -sS -i -X POST --data "" http://127.0.0.1:18082/hello.txt)
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
   echo "$r" | grep -q "Custom 405"
 
@@ -105,8 +105,8 @@ run_sample sample/02_error_page/webserv.conf bash -lc '
   echo "$r" | grep -q "Custom 500"
 
   r=$(curl -sS -i http://127.0.0.1:18082/cgi/bad_header.bad)
-  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 500"
-  echo "$r" | grep -q "Custom 500"
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 502"
+  echo "$r" | grep -q "Custom 502"
 '
 
 # --- 03_autoindex ---
@@ -333,6 +333,54 @@ run_sample sample/05_upload_store/webserv_location_override.conf bash -lc '
 run_sample sample/06_cookie/webserv.conf bash -lc '
   set -euo pipefail
   python3 sample/06_cookie/test_cookie.py
+'
+
+# --- 07_delete ---
+run_sample sample/07_delete/webserv.conf bash -lc '
+  set -euo pipefail
+
+  root="sample/07_delete/www"
+  f_delete="$root/delete_me.txt"
+  f_not_allowed="$root/not_allowed.txt"
+  d_dir="$root/dir"
+  d_protected="$root/protected"
+  f_protected="$d_protected/nope.txt"
+
+  cleanup_perms() {
+    chmod 0755 "$d_protected" 2>/dev/null || true
+    rm -f "$f_protected" 2>/dev/null || true
+  }
+  trap cleanup_perms EXIT
+
+  # 405 優先: method が許可されていない場合は、ファイルの有無に関係なく 405
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/does_not_exist.txt)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
+
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/not_allowed.txt)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
+  test -f "$f_not_allowed"
+
+  # method が許可されている場合のみ削除できる（204）
+  test -f "$f_delete"
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/delete/delete_me.txt)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 204"
+  test ! -f "$f_delete"
+
+  # 許可されているが存在しない場合は 404
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/delete/missing.txt)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 404"
+
+  # 対象がディレクトリの場合は 403
+  test -d "$d_dir"
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/delete/dir)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  # 親ディレクトリに書き込み権限がない場合は 403（unlink は parent dir の権限が必要）
+  printf "cant delete\n" >"$f_protected"
+  chmod 0555 "$d_protected"
+  r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/delete/protected/nope.txt)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+  test -f "$f_protected"
 '
 
 echo "All sample smoke checks passed."

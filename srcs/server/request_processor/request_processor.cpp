@@ -6,7 +6,9 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
+#include <cstdio>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -568,6 +570,80 @@ Result<RequestProcessor::Output> RequestProcessor::process(
             }
             return respondWithErrorPage_(
                 http::HttpStatus::NOT_FOUND, out_response);
+        }
+
+        // DELETE: method が許可されている場合のみここに到達する（405 は routing
+        // 側）。 優先順: 404 -> 403
+        if (current.getMethod() == http::HttpMethod::DELETE)
+        {
+            if (S_ISDIR(st.st_mode))
+            {
+                http::HttpRequest next;
+                if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
+                        server_port_, current, http::HttpStatus::FORBIDDEN,
+                        &next))
+                {
+                    if (!has_preserved_error_status)
+                    {
+                        has_preserved_error_status = true;
+                        preserved_error_status = http::HttpStatus::FORBIDDEN;
+                    }
+                    current = next;
+                    continue;
+                }
+                return respondWithErrorPage_(
+                    http::HttpStatus::FORBIDDEN, out_response);
+            }
+
+            if (!S_ISREG(st.st_mode))
+            {
+                http::HttpRequest next;
+                if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
+                        server_port_, current, http::HttpStatus::NOT_FOUND,
+                        &next))
+                {
+                    if (!has_preserved_error_status)
+                    {
+                        has_preserved_error_status = true;
+                        preserved_error_status = http::HttpStatus::NOT_FOUND;
+                    }
+                    current = next;
+                    continue;
+                }
+                return respondWithErrorPage_(
+                    http::HttpStatus::NOT_FOUND, out_response);
+            }
+
+            errno = 0;
+            const int rc = std::remove(target_path.c_str());
+            if (rc == 0)
+            {
+                Result<void> s =
+                    out_response.setStatus(http::HttpStatus::NO_CONTENT);
+                if (s.isError())
+                    return Result<Output>(ERROR, s.getErrorMessage());
+                (void)out_response.setExpectedContentLength(0);
+                out.body_source = NULL;
+                out.should_close_connection = false;
+                return out;
+            }
+
+            const http::HttpStatus err = (errno == ENOENT)
+                                             ? http::HttpStatus::NOT_FOUND
+                                             : http::HttpStatus::FORBIDDEN;
+            http::HttpRequest next;
+            if (tryBuildErrorPageInternalRedirect_(
+                    router_, server_ip_, server_port_, current, err, &next))
+            {
+                if (!has_preserved_error_status)
+                {
+                    has_preserved_error_status = true;
+                    preserved_error_status = err;
+                }
+                current = next;
+                continue;
+            }
+            return respondWithErrorPage_(err, out_response);
         }
 
         // directory

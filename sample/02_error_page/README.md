@@ -1,6 +1,6 @@
 # 02_error_page
 
-`error_page` で 400 / 403 / 404 / 405 / 413 / 500 にカスタムHTMLを適用するサンプルです。
+`error_page` で 400 / 403 / 404 / 405 / 413 / 500 / 502 にカスタムHTMLを適用するサンプルです。
 
 ## 起動
 
@@ -59,3 +59,4 @@ curl -i http://127.0.0.1:18082/cgi/bad_header.bad
 ```
 
 - `HTTP/1.1 500` が返り、本文が `error_page 500` の `errors/500.html` に差し替わっていればOKです。
+- CGI のヘッダが壊れている場合は upstream の不正応答として `HTTP/1.1 502` を返し、`error_page 502` が適用されます。

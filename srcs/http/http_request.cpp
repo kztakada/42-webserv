@@ -127,6 +127,8 @@ HttpRequest::HttpRequest()
       query_string_(),
       minor_version_(1),
       headers_(),
+      content_type_(ContentType::UNKNOWN),
+      content_type_params_(),
       body_framing_(kNoBody),
       decoded_body_bytes_(0),
       content_length_remaining_(0),
@@ -149,6 +151,8 @@ HttpRequest::HttpRequest(const HttpRequest& rhs)
       query_string_(rhs.query_string_),
       minor_version_(rhs.minor_version_),
       headers_(rhs.headers_),
+      content_type_(rhs.content_type_),
+      content_type_params_(rhs.content_type_params_),
       body_framing_(rhs.body_framing_),
       decoded_body_bytes_(rhs.decoded_body_bytes_),
       content_length_remaining_(rhs.content_length_remaining_),
@@ -171,6 +175,8 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& rhs)
         query_string_ = rhs.query_string_;
         minor_version_ = rhs.minor_version_;
         headers_ = rhs.headers_;
+        content_type_ = rhs.content_type_;
+        content_type_params_ = rhs.content_type_params_;
         phase_ = rhs.phase_;
         parse_error_status_ = rhs.parse_error_status_;
         body_framing_ = rhs.body_framing_;
@@ -243,6 +249,24 @@ bool HttpRequest::isChunkedEncoding() const
 bool HttpRequest::hasBody() const { return body_framing_ != kNoBody; }
 
 size_t HttpRequest::getDecodedBodyBytes() const { return decoded_body_bytes_; }
+
+ContentType HttpRequest::getContentType() const { return content_type_; }
+
+bool HttpRequest::hasContentTypeParam(const std::string& key_lowercase) const
+{
+    return content_type_params_.find(key_lowercase) !=
+           content_type_params_.end();
+}
+
+std::string HttpRequest::getContentTypeParam(
+    const std::string& key_lowercase) const
+{
+    std::map<std::string, std::string>::const_iterator it =
+        content_type_params_.find(key_lowercase);
+    if (it == content_type_params_.end())
+        return std::string();
+    return it->second;
+}
 
 void HttpRequest::setLimits(const Limits& limits) { limits_ = limits; }
 
@@ -522,6 +546,20 @@ Result<void> HttpRequest::validateHeaders(bool skip_body_size_check)
     {
         parse_error_status_ = HttpStatus::BAD_REQUEST;
         return Result<void>(ERROR, "missing Host header");
+    }
+
+    // Content-Type
+    // を一括解析（Transfer-Encoding等の早期returnでも取りこぼさない）
+    content_type_ = ContentType::UNKNOWN;
+    content_type_params_.clear();
+    if (hasHeader("Content-Type"))
+    {
+        Result<const std::vector<std::string>&> ct = getHeader("Content-Type");
+        if (ct.isOk() && !ct.unwrap().empty())
+        {
+            content_type_ = ContentType::parseHeaderValue(
+                ct.unwrap()[0], &content_type_params_);
+        }
     }
 
     body_framing_ = kNoBody;

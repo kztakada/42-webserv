@@ -139,6 +139,10 @@ class HttpSession : public FdSession
     Result<void> buildProcessorOutputOrServerError_(
         RequestProcessor::Output* out);
 
+    // upload_store + multipart/form-data の場合、一時ファイルに保存された
+    // multipart envelope から file part だけを抽出し、destination に保存する。
+    Result<void> finalizeUploadStoreIfNeeded_();
+
     // ---- internal helpers ----
     static http::HttpResponseEncoder::Options makeEncoderOptions_(
         const http::HttpRequest& request);

@@ -3,7 +3,7 @@
 
   NOTE:
   - 同一オリジンの相対URL（/upload）に POST する
-  - 送信は multipart/form-data ではなく、ファイルの生バイト列をそのまま POST
+  - 送信は multipart/form-data（FormData）
 */
 
 const UPLOAD_BASE_PATH = "/upload";
@@ -76,14 +76,17 @@ async function uploadFile(file) {
 
   let resp;
   try {
+    const form = new FormData();
+    // フィールド名はサーバー側で特に固定しない想定（file part を抽出）
+    form.append("file", file, file.name || "upload.bin");
+
     resp = await fetch(url, {
       method: "POST",
       headers: {
-        // 任意: 何を送っているか分かりやすいように付ける
-        "Content-Type": file.type || "application/octet-stream",
         "X-Original-Filename": file.name || "",
       },
-      body: file,
+      // Content-Type はブラウザが boundary 付きで自動設定する
+      body: form,
     });
   } catch (e) {
     setLog("fetch failed: " + String(e));

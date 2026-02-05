@@ -15,6 +15,26 @@ Result<void> HttpSession::prepareResponseOrCgi_()
     if (rr.isError())
         return rr;
 
+    Result<void> fu = finalizeUploadStoreIfNeeded_();
+    if (fu.isError())
+    {
+        RequestProcessor::Output out;
+        Result<void> bo =
+            buildErrorOutput_(http::HttpStatus::BAD_REQUEST, &out);
+        if (bo.isError())
+            return bo;
+        response_.setHttpVersion(request_.getHttpVersion());
+        installBodySourceAndWriter_(out.body_source);
+
+        should_close_connection_ = should_close_connection_ || peer_closed_ ||
+                                   out.should_close_connection ||
+                                   !request_.shouldKeepAlive() ||
+                                   handler_.shouldCloseConnection();
+        state_ = SEND_RESPONSE;
+        (void)updateSocketWatches_();
+        return Result<void>();
+    }
+
     if (handler_.getNextStep() == HttpHandler::EXECUTE_CGI)
     {
         Result<void> sr = startCgi_();

@@ -220,6 +220,7 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   store="sample/05_upload_store/store_default"
   dest_2m="$store/default_2m.bin"
   dest_512k="$store/default_512k.bin"
+  dest_512k_multipart="$store/default_512k_multipart.bin"
   dest_overwrite="$store/overwrite.bin"
   tmp_small=$(mktemp /tmp/webserv_upload_512k_XXXXXX.bin)
   tmp_big=$(mktemp /tmp/webserv_upload_2m_XXXXXX.bin)
@@ -229,7 +230,7 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   cleanup_upload() {
     rm -f "$tmp_small" "$tmp_big"
     rm -f "$tmp_overwrite_1" "$tmp_overwrite_2"
-    rm -f "$dest_2m" "$dest_512k" "$dest_overwrite"
+    rm -f "$dest_2m" "$dest_512k" "$dest_512k_multipart" "$dest_overwrite"
   }
   trap cleanup_upload EXIT
 
@@ -246,6 +247,15 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   test -f "$dest_512k"
 
   size_dest=$(wc -c <"$dest_512k" | tr -d "[:space:]")
+  size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
+  test "$size_dest" -eq "$size_src"
+
+  # multipart/form-data でも成功（file part の中身だけ保存される）
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small" http://127.0.0.1:18085/upload/default_512k_multipart.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_512k_multipart"
+
+  size_dest=$(wc -c <"$dest_512k_multipart" | tr -d "[:space:]")
   size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
   test "$size_dest" -eq "$size_src"
 
@@ -351,6 +361,9 @@ run_sample sample/07_delete/webserv.conf bash -lc '
     rm -f "$f_protected" 2>/dev/null || true
   }
   trap cleanup_perms EXIT
+
+  # このスモークは繰り返し実行されるため、削除対象を毎回作り直す
+  printf "delete me\n" >"$f_delete"
 
   # 405 優先: method が許可されていない場合は、ファイルの有無に関係なく 405
   r=$(curl -sS -i -X DELETE http://127.0.0.1:18089/does_not_exist.txt)

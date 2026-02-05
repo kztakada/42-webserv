@@ -144,13 +144,24 @@ Result<void> HttpHandler::ensureRoutingAndApplyBodyLimit_()
     if (!has_configured_body_store_for_upload_ &&
         location_routing_.getNextAction() == STORE_BODY)
     {
+        // multipart/form-data はボディ全体をそのまま保存すると envelope まで
+        // 含まれてしまうため、一旦は一時ファイルに保存しておき、リクエスト
+        // 完了後に file part だけを抽出して destination に保存する。
+        if (request_.getContentType() == ContentType::MULTIPART_FORM_DATA)
+        {
+            has_configured_body_store_for_upload_ = true;
+        }
+
         Result<UploadContext> up = location_routing_.getUploadContext();
         if (up.isOk())
         {
             UploadContext ctx = up.unwrap();
-            (void)body_store_.configureForUpload(
-                ctx.destination_path.str(), ctx.allow_overwrite);
-            has_configured_body_store_for_upload_ = true;
+            if (!has_configured_body_store_for_upload_)
+            {
+                (void)body_store_.configureForUpload(
+                    ctx.destination_path.str(), ctx.allow_overwrite);
+                has_configured_body_store_for_upload_ = true;
+            }
         }
     }
 

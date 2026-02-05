@@ -4,8 +4,8 @@
 
 - `smoke_test.sh` には載せません
 - 静的なアップロードサイト（HTML/CSS/JS）を配信します
-- 画像をドロップすると、JS が **同一オリジンの相対URL** に `POST` で生アップロードします
-  - `multipart/form-data` ではなく、ファイルバイト列をそのまま送ります
+- 画像をドロップすると、JS が **同一オリジンの相対URL** に `POST` でアップロードします
+  - ブラウザの `FormData` を使って `multipart/form-data` で送ります
 
 ## 起動
 

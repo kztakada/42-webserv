@@ -1,6 +1,7 @@
 #ifndef HTTP_CONTENT_TYPES_HPP_
 #define HTTP_CONTENT_TYPES_HPP_
 
+#include <cctype>
 #include <cstring>
 #include <map>
 #include <string>
@@ -32,6 +33,7 @@ class ContentType
         APPLICATION_ZIP,
         APPLICATION_OCTET_STREAM,
         APPLICATION_X_WWW_FORM_URLENCODED,
+        MULTIPART_FORM_DATA,
         // image/*
         IMAGE_PNG,
         IMAGE_JPEG,
@@ -112,6 +114,8 @@ class ContentType
                 return "application/octet-stream";
             case APPLICATION_X_WWW_FORM_URLENCODED:
                 return "application/x-www-form-urlencoded";
+            case MULTIPART_FORM_DATA:
+                return "multipart/form-data";
             case IMAGE_PNG:
                 return "image/png";
             case IMAGE_JPEG:
@@ -184,6 +188,8 @@ class ContentType
             return APPLICATION_OCTET_STREAM;
         if (std::strcmp(mime_type, "application/x-www-form-urlencoded") == 0)
             return APPLICATION_X_WWW_FORM_URLENCODED;
+        if (std::strcmp(mime_type, "multipart/form-data") == 0)
+            return MULTIPART_FORM_DATA;
         if (std::strcmp(mime_type, "image/png") == 0)
             return IMAGE_PNG;
         if (std::strcmp(mime_type, "image/jpeg") == 0)
@@ -225,6 +231,61 @@ class ContentType
     static ContentType fromMimeString(const std::string& mime_type)
     {
         return fromMimeString(mime_type.c_str());
+    }
+
+    // Content-Type ヘッダー値を解析する。
+    // 例: "multipart/form-data; boundary=----WebKitFormBoundary..."
+    // - media-type は小文字化して fromMimeString() に渡す
+    // - params_out には key を小文字で格納する
+    // - 値の両端にある引用符(")は取り除く
+    static ContentType parseHeaderValue(const std::string& header_value,
+        std::map<std::string, std::string>* params_out)
+    {
+        if (params_out != NULL)
+            params_out->clear();
+
+        std::string s = header_value;
+
+        // media-type と parameters を分離
+        std::string::size_type semi = s.find(';');
+        std::string media = (semi == std::string::npos) ? s : s.substr(0, semi);
+        media = trimAsciiOws_(media);
+        media = toLowerAscii_(media);
+
+        if (semi == std::string::npos)
+            return fromMimeString(media);
+
+        // parameters
+        std::string rest = s.substr(semi + 1);
+        std::string::size_type pos = 0;
+        while (pos < rest.size())
+        {
+            std::string::size_type next = rest.find(';', pos);
+            std::string token = (next == std::string::npos)
+                                    ? rest.substr(pos)
+                                    : rest.substr(pos, next - pos);
+            pos = (next == std::string::npos) ? rest.size() : next + 1;
+
+            token = trimAsciiOws_(token);
+            if (token.empty())
+                continue;
+
+            std::string::size_type eq = token.find('=');
+            if (eq == std::string::npos)
+                continue;
+
+            std::string key = trimAsciiOws_(token.substr(0, eq));
+            std::string val = trimAsciiOws_(token.substr(eq + 1));
+            if (key.empty())
+                continue;
+
+            key = toLowerAscii_(key);
+            val = unquote_(val);
+            if (params_out != NULL)
+                (*params_out)[key] = val;
+        }
+
+        return fromMimeString(media);
     }
 
     // 7. 拡張子からの生成 (fromExtension)
@@ -304,6 +365,37 @@ class ContentType
 
    private:
     Type type_;
+
+    static std::string toLowerAscii_(const std::string& s)
+    {
+        std::string out = s;
+        for (size_t i = 0; i < out.size(); ++i)
+        {
+            out[i] = static_cast<char>(
+                std::tolower(static_cast<unsigned char>(out[i])));
+        }
+        return out;
+    }
+
+    static bool isOws_(char c) { return c == ' ' || c == '\t'; }
+
+    static std::string trimAsciiOws_(const std::string& s)
+    {
+        size_t start = 0;
+        while (start < s.size() && isOws_(s[start]))
+            ++start;
+        size_t end = s.size();
+        while (end > start && isOws_(s[end - 1]))
+            --end;
+        return s.substr(start, end - start);
+    }
+
+    static std::string unquote_(const std::string& s)
+    {
+        if (s.size() >= 2 && s[0] == '"' && s[s.size() - 1] == '"')
+            return s.substr(1, s.size() - 2);
+        return s;
+    }
 };
 
 }  // namespace http

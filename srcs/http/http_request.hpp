@@ -2,9 +2,11 @@
 #define HTTP_HTTP_REQUEST_HPP_
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
 
+#include "http/content_types.hpp"
 #include "http/header.hpp"
 #include "http/http_method.hpp"
 #include "http/status.hpp"
@@ -85,6 +87,13 @@ class HttpRequest
     bool hasBody() const;
     size_t getDecodedBodyBytes() const;
 
+    // Content-Type
+    // headers の Content-Type をパースした結果を返す。
+    // 未指定/未知の場合は UNKNOWN。
+    ContentType getContentType() const;
+    bool hasContentTypeParam(const std::string& key_lowercase) const;
+    std::string getContentTypeParam(const std::string& key_lowercase) const;
+
     // Keep-Alive
     // 判定（HTTP/1.1はデフォルトKeep-Alive、HTTP/1.0はデフォルトclose）
     // Connection: close / keep-alive を解釈した結果を返す。
@@ -140,6 +149,10 @@ class HttpRequest
 
     // ヘッダセクション
     HeaderMap headers_;
+
+    // Content-Type（ヘッダ確定時に一括解析）
+    ContentType content_type_;
+    std::map<std::string, std::string> content_type_params_;
 
     // メッセージボディ
     BodyFraming body_framing_;

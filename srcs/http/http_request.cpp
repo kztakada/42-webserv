@@ -689,6 +689,12 @@ Result<void> HttpRequest::validateHeaders(bool skip_body_size_check)
     }
     else
     {
+        if (method_ == HttpMethod::POST || method_ == HttpMethod::PUT ||
+            method_ == HttpMethod::PATCH)
+        {
+            parse_error_status_ = HttpStatus::LENGTH_REQUIRED;
+            return Result<void>(ERROR, "missing Content-Length");
+        }
         body_framing_ = kNoBody;
     }
 

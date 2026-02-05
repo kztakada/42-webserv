@@ -94,8 +94,16 @@ TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
     for (size_t i = 0; i < sizeof(kCases) / sizeof(kCases[0]); ++i)
     {
         http::HttpRequest req;
-        std::string raw = std::string(kCases[i].token) +
-                          " /test HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        std::string raw = std::string(kCases[i].token) + " /test HTTP/1.1\r\n" +
+                          "Host: example.com\r\n";
+        if (kCases[i].type == http::HttpMethod::POST ||
+            kCases[i].type == http::HttpMethod::PUT ||
+            kCases[i].type == http::HttpMethod::PATCH)
+        {
+            // 411 Length Required を避けるため、ボディ無しでも明示する
+            raw += "Content-Length: 0\r\n";
+        }
+        raw += "\r\n";
         std::vector<utils::Byte> buf = toBytes(raw.c_str());
         utils::result::Result<size_t> r = req.parse(buf);
 
@@ -440,6 +448,18 @@ TEST(HttpRequest, RejectsUnsupportedHttpVersionWith505)
     EXPECT_TRUE(req.hasParseError());
     EXPECT_EQ(http::HttpStatus::HTTP_VERSION_NOT_SUPPORTED,
         req.getParseErrorStatus());
+}
+
+TEST(HttpRequest, RejectsPostWithoutLengthWith411)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf =
+        toBytes("POST / HTTP/1.1\r\nHost: example.com\r\n\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+
+    EXPECT_FALSE(r.isOk());
+    EXPECT_TRUE(req.hasParseError());
+    EXPECT_EQ(http::HttpStatus::LENGTH_REQUIRED, req.getParseErrorStatus());
 }
 
 // chunkedがリストの最後に来ていない(400)

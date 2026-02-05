@@ -33,12 +33,15 @@ class HttpStatus
         NOT_FOUND = 404,
         NOT_ALLOWED = 405,
         NOT_ACCEPTABLE = 406,
+        LENGTH_REQUIRED = 411,
         REQUEST_TIMEOUT = 408,
         PAYLOAD_TOO_LARGE = 413,
         URI_TOO_LONG = 414,
         SERVER_ERROR = 500,
         NOT_IMPLEMENTED = 501,
+        BAD_GATEWAY = 502,
         SERVICE_UNAVAILABLE = 503,
+        GATEWAY_TIMEOUT = 504,
         HTTP_VERSION_NOT_SUPPORTED = 505,
         UNKNOWN = 0
     };
@@ -129,6 +132,8 @@ class HttpStatus
                 return "Method Not Allowed";
             case NOT_ACCEPTABLE:
                 return "Not Acceptable";
+            case LENGTH_REQUIRED:
+                return "Length Required";
             case REQUEST_TIMEOUT:
                 return "Request Timeout";
             case PAYLOAD_TOO_LARGE:
@@ -139,8 +144,12 @@ class HttpStatus
                 return "Internal Server Error";
             case NOT_IMPLEMENTED:
                 return "Not Implemented";
+            case BAD_GATEWAY:
+                return "Bad Gateway";
             case SERVICE_UNAVAILABLE:
                 return "Service Unavailable";
+            case GATEWAY_TIMEOUT:
+                return "Gateway Timeout";
             case HTTP_VERSION_NOT_SUPPORTED:
                 return "HTTP Version Not Supported";
             default:
@@ -253,6 +262,8 @@ class HttpStatus
                 return NOT_ALLOWED;
             case 406:
                 return NOT_ACCEPTABLE;
+            case 411:
+                return LENGTH_REQUIRED;
             case 408:
                 return REQUEST_TIMEOUT;
             case 413:
@@ -263,8 +274,12 @@ class HttpStatus
                 return SERVER_ERROR;
             case 501:
                 return NOT_IMPLEMENTED;
+            case 502:
+                return BAD_GATEWAY;
             case 503:
                 return SERVICE_UNAVAILABLE;
+            case 504:
+                return GATEWAY_TIMEOUT;
             case 505:
                 return HTTP_VERSION_NOT_SUPPORTED;
             default:

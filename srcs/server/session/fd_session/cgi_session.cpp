@@ -105,16 +105,18 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
 
     if (event.type == kTimeoutEvent || event.type == kErrorEvent)
     {
+        const char* msg = (event.type == kTimeoutEvent) ? "cgi session timeout"
+                                                        : "cgi session error";
+
         // 親側は CGI エラーとして扱う想定
         if (!headers_complete_ && parent_session_ != NULL &&
             !error_notified_to_parent_)
         {
             error_notified_to_parent_ = true;
-            (void)parent_session_->onCgiError(
-                *this, "cgi session error/timeout");
+            (void)parent_session_->onCgiError(*this, msg);
         }
         controller_.requestDelete(this);
-        return Result<void>(ERROR, "cgi session error/timeout");
+        return Result<void>(ERROR, msg);
     }
 
     Result<void> r;

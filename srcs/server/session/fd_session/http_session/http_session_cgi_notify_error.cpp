@@ -42,7 +42,12 @@ Result<void> HttpSession::handleCgiError_(
     response_.setHttpVersion(request_.getHttpVersion());
 
     RequestProcessor::Output out;
-    Result<void> bo = buildErrorOutput_(http::HttpStatus::SERVER_ERROR, &out);
+    http::HttpStatus st = http::HttpStatus::BAD_GATEWAY;
+    if (message.find("timeout") != std::string::npos)
+    {
+        st = http::HttpStatus::GATEWAY_TIMEOUT;
+    }
+    Result<void> bo = buildErrorOutput_(st, &out);
     if (bo.isError())
     {
         out.body_source = NULL;

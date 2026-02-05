@@ -227,6 +227,66 @@ TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
     delete out.unwrap().body_source;
 }
 
+TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
+{
+    const std::string root = makeTempDirOrDie_();
+    mkdirOrDie_(root + "/errors");
+    writeFileOrDie_(root + "/errors/501.html", "Custom501");
+
+    server::VirtualServerConf vs;
+    ASSERT_TRUE(vs.appendListen("", "8080").isOk());
+    ASSERT_TRUE(vs.setRootDir(root).isOk());
+    ASSERT_TRUE(
+        vs.appendErrorPage(
+              http::HttpStatus::NOT_IMPLEMENTED, "/errors/501.html")
+            .isOk());
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/").isOk());
+    ASSERT_TRUE(vs.appendLocation(loc).isOk());
+    ASSERT_TRUE(vs.isValid());
+
+    server::ServerConfig cfg;
+    ASSERT_TRUE(cfg.appendServer(vs).isOk());
+    ASSERT_TRUE(cfg.isValid());
+
+    server::RequestRouter router(cfg);
+
+    utils::result::Result<IPAddress> ip =
+        IPAddress::parseIpv4Numeric("127.0.0.1");
+    ASSERT_TRUE(ip.isOk());
+    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    ASSERT_TRUE(port.isOk());
+
+    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+
+    const std::string methods[] = {
+        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE",
+        "FOO"  // unknown but valid token
+    };
+
+    for (size_t i = 0; i < (sizeof(methods) / sizeof(methods[0])); ++i)
+    {
+        http::HttpRequest req = mustParseRequest_(
+            methods[i] +
+            std::string(" /any HTTP/1.1\r\nHost: "
+                        "example.com\r\nContent-Length: 0\r\n\r\n"));
+
+        http::HttpResponse resp;
+        utils::result::Result<server::RequestProcessor::Output> out =
+            proc.process(req, resp);
+        ASSERT_TRUE(out.isOk());
+
+        EXPECT_EQ(resp.getStatus().getCode(), 501u);
+        ASSERT_TRUE(out.unwrap().body_source != NULL);
+
+        std::string body = readAll_(out.unwrap().body_source);
+        EXPECT_EQ(body, std::string("Custom501"));
+
+        delete out.unwrap().body_source;
+    }
+}
+
 TEST(RequestProcessor, NotFoundUsesDefaultErrorPageWhenNoCustom)
 {
     const std::string root = makeTempDirOrDie_();

@@ -20,7 +20,7 @@ Result<void> HttpSession::handleCgiHeadersReadyNormal_(
     Result<void> ar = cr.applyToHttpResponse(response_);
     if (ar.isError())
     {
-        // CGIヘッダが壊れている場合は CGI 出力を捨てて 500 を返す。
+        // CGIヘッダが壊れている場合は upstream の不正応答として 502 を返す。
         const std::vector<utils::Byte> prefetched = cgi.takePrefetchedBody();
         (void)prefetched;
         const int stdout_fd = cgi.releaseStdoutFd();
@@ -35,7 +35,7 @@ Result<void> HttpSession::handleCgiHeadersReadyNormal_(
 
         RequestProcessor::Output out;
         Result<void> bo =
-            buildErrorOutput_(http::HttpStatus::SERVER_ERROR, &out);
+            buildErrorOutput_(http::HttpStatus::BAD_GATEWAY, &out);
         if (bo.isError())
         {
             out.body_source = NULL;

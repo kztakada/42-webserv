@@ -16,17 +16,17 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
       handler_(request_, response_, router, socket_fd_.getServerIp(),
           socket_fd_.getServerPort(), this),
       processor_(router_, socket_fd_.getServerIp(), socket_fd_.getServerPort()),
+      active_cgi_session_(NULL),
       body_source_(NULL),
       response_writer_(NULL),
       recv_buffer_(),
       send_buffer_(),
-      socket_watch_read_(false),
-      socket_watch_write_(false),
       state_(RECV_REQUEST),
       redirect_count_(0),
-      active_cgi_session_(NULL),
       peer_closed_(false),
-      should_close_connection_(false)
+      should_close_connection_(false),
+      socket_watch_read_(false),
+      socket_watch_write_(false)
 {
     updateLastActiveTime();
 }

@@ -6,6 +6,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -95,7 +96,7 @@ Result<void> HttpSession::startCgi_()
         return Result<void>(ERROR, d.getErrorMessage());
     }
 
-    state_ = EXECUTE_CGI;
+    changeState(new ExecuteCgiState());
     (void)updateSocketWatches_();
     return Result<void>();
 }

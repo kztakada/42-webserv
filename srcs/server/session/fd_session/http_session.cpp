@@ -1,5 +1,7 @@
 #include "server/session/fd_session/http_session.hpp"
 
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
+
 namespace server
 {
 
@@ -21,7 +23,9 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
       response_writer_(NULL),
       recv_buffer_(),
       send_buffer_(),
-      state_(RECV_REQUEST),
+      current_state_(new RecvRequestState()),
+      pending_state_(NULL),
+      is_complete_(false),
       redirect_count_(0),
       peer_closed_(false),
       should_close_connection_(false),
@@ -33,6 +37,16 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
 
 HttpSession::~HttpSession()
 {
+    if (pending_state_ != NULL)
+    {
+        delete pending_state_;
+        pending_state_ = NULL;
+    }
+    if (current_state_ != NULL)
+    {
+        delete current_state_;
+        current_state_ = NULL;
+    }
     if (response_writer_ != NULL)
     {
         delete response_writer_;
@@ -54,6 +68,15 @@ void HttpSession::getInitialWatchSpecs(
     out->push_back(FdSession::FdWatchSpec(socket_fd_.getFd(), true, false));
 }
 
-bool HttpSession::isComplete() const { return state_ == CLOSE_WAIT; }
+bool HttpSession::isComplete() const { return is_complete_; }
+
+void HttpSession::changeState(IHttpSessionState* next_state)
+{
+    if (pending_state_ != NULL)
+    {
+        delete pending_state_;
+    }
+    pending_state_ = next_state;
+}
 
 }  // namespace server

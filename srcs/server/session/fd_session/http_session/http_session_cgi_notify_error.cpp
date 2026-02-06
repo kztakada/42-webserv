@@ -3,6 +3,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 #include "utils/log.hpp"
 
 namespace server
@@ -13,11 +14,13 @@ using namespace utils::result;
 Result<void> HttpSession::handleCgiError_(
     CgiSession& cgi, const std::string& message)
 {
-    if (state_ == CLOSE_WAIT)
+    if (pending_state_ != NULL) return Result<void>();
+
+    if (dynamic_cast<CloseWaitState*>(current_state_))
         return Result<void>();
 
     // CGI 実行中以外に通知が来た場合は安全に無視する。
-    if (state_ != EXECUTE_CGI)
+    if (!dynamic_cast<ExecuteCgiState*>(current_state_))
         return Result<void>();
 
     utils::Log::error("CGI error: ", message);
@@ -61,7 +64,7 @@ Result<void> HttpSession::handleCgiError_(
                                out.should_close_connection ||
                                !request_.shouldKeepAlive() ||
                                handler_.shouldCloseConnection();
-    state_ = SEND_RESPONSE;
+    changeState(new SendResponseState());
     (void)updateSocketWatches_();
     return Result<void>();
 }

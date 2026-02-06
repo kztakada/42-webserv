@@ -15,6 +15,7 @@
 #include "server/session/fd_session/http_session/body_source.hpp"
 #include "server/session/fd_session/http_session/http_handler.hpp"
 #include "server/session/fd_session/http_session/http_response_writer.hpp"
+#include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
@@ -29,6 +30,10 @@ using namespace utils::result;
 using namespace http;
 
 class CgiSession;
+class RecvRequestState;
+class ExecuteCgiState;
+class SendResponseState;
+class CloseWaitState;
 
 // HTTPセッション：HTTPリクエスト/レスポンスの処理状態を管理
 class HttpSession : public FdSession
@@ -61,6 +66,14 @@ class HttpSession : public FdSession
     Result<void> onCgiHeadersReady(CgiSession& cgi);
     Result<void> onCgiError(CgiSession& cgi, const std::string& message);
 
+    // 状態遷移
+    void changeState(IHttpSessionState* next_state);
+
+    friend class RecvRequestState;
+    friend class ExecuteCgiState;
+    friend class SendResponseState;
+    friend class CloseWaitState;
+
    private:
     // --- プロトコル解析・構築 ---
     HttpRequest request_;    // 動的なHTTPリクエスト
@@ -77,7 +90,7 @@ class HttpSession : public FdSession
     CgiSession* active_cgi_session_;  // 実行中のCGI（なければNULL）
 
     // --- データ転送関連 ---
-    BodySource* body_source_;  // レスポンスボディ供給元（所有権あり）
+    BodySource* body_source_;              // レスポンスボディ供給元（所有権あり）
     HttpResponseWriter* response_writer_;  // レスポンスエンコード・送信補助
 
     // ソケットI/O用バッファ
@@ -85,13 +98,10 @@ class HttpSession : public FdSession
     IoBuffer send_buffer_;  // クライアントへのデータ送信用
 
     // --- 状態・制御 ---
-    enum State
-    {
-        RECV_REQUEST,
-        EXECUTE_CGI,
-        SEND_RESPONSE,
-        CLOSE_WAIT
-    } state_;                       // 現在のセッション状態
+    IHttpSessionState* current_state_;  // 現在のステート
+    IHttpSessionState* pending_state_;  // 遷移予定のステート
+    bool is_complete_;                  // 完了フラグ
+
     int redirect_count_;            // 内部リダイレクト回数
     bool peer_closed_;              // クライアントがcloseしたか
     bool should_close_connection_;  // レスポンス後に接続を閉じるべきか
@@ -101,15 +111,6 @@ class HttpSession : public FdSession
     HttpSession();
     HttpSession(const HttpSession& rhs);
     HttpSession& operator=(const HttpSession& rhs);
-
-    // Readイベントハンドラー http_session_event_recv.cpp
-    Result<void> handleRecvRequestReadEvent_(const FdEvent& event);
-
-    // Writeイベントハンドラー http_session_event_send.cpp
-    Result<void> handleSendResponseWriteEvent_(const FdEvent& event);
-
-    // CGI実行中のイベントハンドラー http_session_event_cgi.cpp
-    Result<void> handleExecuteCgiEvent_(const FdEvent& event);
 
     // http_session_cgi.cpp
     Result<void> startCgi_();

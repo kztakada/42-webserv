@@ -4,6 +4,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -39,7 +40,7 @@ Result<void> HttpSession::handleCgiHeadersReadyLocalRedirect_(
                                    out.should_close_connection ||
                                    !request_.shouldKeepAlive() ||
                                    handler_.shouldCloseConnection();
-        state_ = SEND_RESPONSE;
+        changeState(new SendResponseState());
         (void)updateSocketWatches_();
         return Result<void>();
     }

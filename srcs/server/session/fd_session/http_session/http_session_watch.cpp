@@ -1,5 +1,6 @@
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -15,22 +16,26 @@ Result<void> HttpSession::updateSocketWatches_()
     bool want_read = false;
     bool want_write = false;
 
-    if (state_ != CLOSE_WAIT)
+    IHttpSessionState* s = pending_state_ ? pending_state_ : current_state_;
+
+    // dynamic_castで状態判定
+    if (dynamic_cast<RecvRequestState*>(s))
     {
-        if (state_ == RECV_REQUEST)
-            want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
-        else if (state_ == SEND_RESPONSE)
-            want_write = true;
-        else if (state_ == EXECUTE_CGI)
-        {
-            // CGI 実行中も client close 検出のため read を見る。
-            // パイプラインの次リクエストは recv_buffer_ に溜める（上限あり）。
-            want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
-        }
-        else
-        {
-            // CLOSE_WAIT: ソケットwatchなし。
-        }
+        want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
+    }
+    else if (dynamic_cast<SendResponseState*>(s))
+    {
+        want_write = true;
+    }
+    else if (dynamic_cast<ExecuteCgiState*>(s))
+    {
+        // CGI 実行中も client close 検出のため read を見る。
+        // パイプラインの次リクエストは recv_buffer_ に溜める（上限あり）。
+        want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
+    }
+    else if (dynamic_cast<CloseWaitState*>(s))
+    {
+        // CLOSE_WAIT: ソケットwatchなし。
     }
 
     if (want_read == socket_watch_read_ && want_write == socket_watch_write_)

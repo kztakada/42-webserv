@@ -1,4 +1,5 @@
 #include "server/session/fd_session/http_session.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -32,7 +33,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
                                    out.should_close_connection ||
                                    !request_.shouldKeepAlive() ||
                                    handler_.shouldCloseConnection();
-        state_ = SEND_RESPONSE;
+        changeState(new SendResponseState());
         (void)updateSocketWatches_();
         return Result<void>();
     }
@@ -54,7 +55,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
                 should_close_connection_ || peer_closed_ ||
                 out.should_close_connection || !request_.shouldKeepAlive() ||
                 handler_.shouldCloseConnection();
-            state_ = SEND_RESPONSE;
+            changeState(new SendResponseState());
             (void)updateSocketWatches_();
             return Result<void>();
         }
@@ -72,7 +73,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
                                out.should_close_connection ||
                                !request_.shouldKeepAlive() ||
                                handler_.shouldCloseConnection();
-    state_ = SEND_RESPONSE;
+    changeState(new SendResponseState());
     (void)updateSocketWatches_();
     return Result<void>();
 }
@@ -82,9 +83,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 // にある」場合の 停滞を防ぐ。
 Result<void> HttpSession::consumeRecvBufferWithoutRead_()
 {
-    if (state_ != RECV_REQUEST)
-        return Result<void>();
-    if (state_ == CLOSE_WAIT)
+    if (pending_state_ != NULL)
         return Result<void>();
 
     // recv_buffer_ の中だけで進める（read()はしない）。
@@ -107,7 +106,7 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
             response_.setHttpVersion(request_.getHttpVersion());
 
             installBodySourceAndWriter_(out.body_source);
-            state_ = SEND_RESPONSE;
+            changeState(new SendResponseState());
             (void)updateSocketWatches_();
             return Result<void>();
         }

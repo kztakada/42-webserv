@@ -4,6 +4,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -49,7 +50,7 @@ Result<void> HttpSession::handleCgiHeadersReadyNormal_(
                                    out.should_close_connection ||
                                    !request_.shouldKeepAlive() ||
                                    handler_.shouldCloseConnection();
-        state_ = SEND_RESPONSE;
+        changeState(new SendResponseState());
         (void)updateSocketWatches_();
         return Result<void>();
     }
@@ -63,7 +64,7 @@ Result<void> HttpSession::handleCgiHeadersReadyNormal_(
 
     BodySource* bs = new PrefetchedFdBodySource(stdout_fd, prefetched);
     installBodySourceAndWriter_(bs);
-    state_ = SEND_RESPONSE;
+    changeState(new SendResponseState());
     (void)updateSocketWatches_();
 
     // 以後 CgiSession は controller が所有/削除する。HttpSession

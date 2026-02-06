@@ -9,13 +9,10 @@ using namespace utils::result;
 
 HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
     const SocketAddress& client_addr, FdSessionController& controller,
-    const RequestRouter& router)
+    HttpProcessingModule& module)
     : FdSession(controller, kDefaultTimeoutSec),
-      context_(fd, server_addr, client_addr, controller, router),
-      cgi_handler_(),
-      dispatcher_(),
-      processor_(router, context_.socket_fd.getServerIp(),
-          context_.socket_fd.getServerPort())
+      context_(fd, server_addr, client_addr, controller, module.router),
+      module_(module)
 {
     context_.current_state = new RecvRequestState();
     updateLastActiveTime();
@@ -49,13 +46,13 @@ void HttpSession::changeState(IHttpSessionState* next_state)
 
 Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
 {
-    return cgi_handler_.onCgiHeadersReady(*this, cgi);
+    return module_.cgi_handler.onCgiHeadersReady(*this, cgi);
 }
 
-Result<void> HttpSession::onCgiError(CgiSession& cgi,
-    const std::string& message)
+Result<void> HttpSession::onCgiError(
+    CgiSession& cgi, const std::string& message)
 {
-    return cgi_handler_.onCgiError(*this, cgi, message);
+    return module_.cgi_handler.onCgiError(*this, cgi, message);
 }
 
 }  // namespace server

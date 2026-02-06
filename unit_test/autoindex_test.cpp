@@ -10,7 +10,7 @@
 #include "network/port_type.hpp"
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "server/request_processor/request_processor.hpp"
+#include "server/http_processing_module/request_processor.hpp"
 #include "utils/byte.hpp"
 
 static std::vector<utils::Byte> toBytes_(const std::string& s)
@@ -106,14 +106,14 @@ TEST(RequestProcessor, AutoIndexReturnsDirectoryListingHtml)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     http::HttpRequest req =
         mustParseRequest_("GET /dir/ HTTP/1.1\r\nHost: example.com\r\n\r\n");
 
     http::HttpResponse resp;
     utils::result::Result<server::RequestProcessor::Output> out =
-        proc.process(req, resp);
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 200u);

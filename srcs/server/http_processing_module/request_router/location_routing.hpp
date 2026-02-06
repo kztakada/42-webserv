@@ -7,9 +7,9 @@
 
 #include "http/http_request.hpp"
 #include "http/status.hpp"
-#include "server/request_router/location_directive.hpp"
-#include "server/request_router/resolved_request_context.hpp"
-#include "server/request_router/virtual_server.hpp"
+#include "server/http_processing_module/request_router/location_directive.hpp"
+#include "server/http_processing_module/request_router/resolved_request_context.hpp"
+#include "server/http_processing_module/request_router/virtual_server.hpp"
 #include "utils/byte.hpp"
 #include "utils/path.hpp"
 #include "utils/result.hpp"

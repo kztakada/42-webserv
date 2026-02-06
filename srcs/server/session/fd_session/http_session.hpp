@@ -7,17 +7,17 @@
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
 #include "http/http_response_encoder.hpp"
+#include "server/http_processing_module/http_processing_module.hpp"
+#include "server/http_processing_module/request_dispatcher.hpp"
+#include "server/http_processing_module/request_processor.hpp"
+#include "server/http_processing_module/request_router/request_router.hpp"
 #include "server/reactor/fd_event.hpp"
-#include "server/request_processor/request_processor.hpp"
-#include "server/request_router/request_router.hpp"
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
 #include "server/session/fd_session.hpp"
 #include "server/session/fd_session/http_session/body_source.hpp"
 #include "server/session/fd_session/http_session/http_response_writer.hpp"
-#include "server/session/fd_session/http_session/request_dispatcher.hpp"
-#include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
-#include "server/session/fd_session/http_session/session_cgi_handler.hpp"
 #include "server/session/fd_session/http_session/session_context.hpp"
+#include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
@@ -55,7 +55,7 @@ class HttpSession : public FdSession
     // コンストラクタ・デストラクタ
     HttpSession(int fd, const SocketAddress& server_addr,
         const SocketAddress& client_addr, FdSessionController& controller,
-        const RequestRouter& router);
+        HttpProcessingModule& module);
     virtual ~HttpSession();
 
     // for Watch初期設定
@@ -88,12 +88,11 @@ class HttpSession : public FdSession
 
    private:
     SessionContext context_;
-    
-    // --- サブモジュール ---
-    SessionCgiHandler cgi_handler_; // CGIハンドラ
-    RequestDispatcher dispatcher_;  // リクエストディスパッチャ
-    
-    RequestProcessor processor_;   // リクエスト処理ユーティリティ
+
+    HttpProcessingModule& module_;
+
+    HttpProcessingModule& module() { return module_; }
+    const HttpProcessingModule& module() const { return module_; }
 
     HttpSession();
     HttpSession(const HttpSession& rhs);

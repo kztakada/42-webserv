@@ -1,8 +1,8 @@
 #ifndef WEBSERV_LISTENER_SESSION_HPP_
 #define WEBSERV_LISTENER_SESSION_HPP_
 
+#include "server/http_processing_module/http_processing_module.hpp"
 #include "server/reactor/fd_event.hpp"
-#include "server/request_router/request_router.hpp"
 #include "server/session/fd/tcp_socket/tcp_listen_socket_fd.hpp"
 #include "server/session/fd_session.hpp"
 #include "utils/result.hpp"
@@ -18,7 +18,7 @@ class ListenerSession : public FdSession
 {
    public:
     explicit ListenerSession(TcpListenSocketFd* listen_fd,
-        FdSessionController& controller, const RequestRouter& router);
+        FdSessionController& controller, HttpProcessingModule& module);
     virtual ~ListenerSession();
 
     virtual bool isTimedOut() const;  // リスナーセッションはタイムアウトしない
@@ -34,7 +34,7 @@ class ListenerSession : public FdSession
     TcpListenSocketFd* listen_fd_;  // 待ち受け用のソケット (bind/listen済み)
 
     // --- 制御と外部連携 ---
-    const RequestRouter& router_;  // Serverから渡される参照、HttpSession生成用
+    HttpProcessingModule& module_;  // Serverから渡される共有モジュール
 
     void acceptNewConnection();
 

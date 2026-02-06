@@ -1,6 +1,6 @@
 #include "server/session/fd_session/http_session.hpp"
-#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 #include "server/session/fd_session/http_session/actions/send_error_action.hpp"
+#include "server/session/fd_session/http_session/states/http_session_states.hpp"
 
 namespace server
 {
@@ -11,7 +11,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 {
     context_.response.reset();
 
-    Result<IRequestAction*> action_r = dispatcher_.dispatch(context_);
+    Result<IRequestAction*> action_r = module_.dispatcher.dispatch(context_);
     if (action_r.isError())
     {
         // ディスパッチ失敗
@@ -33,7 +33,7 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
     {
         const size_t before = context_.recv_buffer.size();
 
-        Result<void> c = dispatcher_.consumeFromRecvBuffer(context_);
+        Result<void> c = module_.dispatcher.consumeFromRecvBuffer(context_);
         if (c.isError())
         {
             http::HttpStatus st = context_.request.getParseErrorStatus();

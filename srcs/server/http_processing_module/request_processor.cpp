@@ -1,4 +1,4 @@
-#include "server/request_processor/request_processor.hpp"
+#include "server/http_processing_module/request_processor.hpp"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -427,16 +427,16 @@ static bool tryBuildErrorPageInternalRedirect_(const RequestRouter& router,
     return true;
 }
 
-RequestProcessor::RequestProcessor(const RequestRouter& router,
-    const IPAddress& server_ip, const PortType& server_port)
-    : router_(router), server_ip_(server_ip), server_port_(server_port)
+RequestProcessor::RequestProcessor(const RequestRouter& router)
+    : router_(router)
 {
 }
 
 RequestProcessor::~RequestProcessor() {}
 
 Result<RequestProcessor::Output> RequestProcessor::process(
-    const http::HttpRequest& request, http::HttpResponse& out_response)
+    const http::HttpRequest& request, const IPAddress& server_ip,
+    const PortType& server_port, http::HttpResponse& out_response)
 {
     // 内部リダイレクトを最小限サポートする（error_page の内部URI等）
     http::HttpRequest current(request);
@@ -445,7 +445,7 @@ Result<RequestProcessor::Output> RequestProcessor::process(
     for (int redirect_guard = 0; redirect_guard < 5; ++redirect_guard)
     {
         Result<LocationRouting> route_result =
-            router_.route(current, server_ip_, server_port_);
+            router_.route(current, server_ip, server_port);
         if (route_result.isError())
             return Result<Output>(ERROR, route_result.getErrorMessage());
 
@@ -536,8 +536,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         if (resolved.isError())
         {
             http::HttpRequest next;
-            if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                    server_port_, current, http::HttpStatus::NOT_FOUND, &next))
+            if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                    server_port, current, http::HttpStatus::NOT_FOUND, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -557,8 +557,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         if (::stat(target_path.c_str(), &st) != 0)
         {
             http::HttpRequest next;
-            if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                    server_port_, current, http::HttpStatus::NOT_FOUND, &next))
+            if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                    server_port, current, http::HttpStatus::NOT_FOUND, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -579,8 +579,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
             if (S_ISDIR(st.st_mode))
             {
                 http::HttpRequest next;
-                if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                        server_port_, current, http::HttpStatus::FORBIDDEN,
+                if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                        server_port, current, http::HttpStatus::FORBIDDEN,
                         &next))
                 {
                     if (!has_preserved_error_status)
@@ -598,8 +598,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
             if (!S_ISREG(st.st_mode))
             {
                 http::HttpRequest next;
-                if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                        server_port_, current, http::HttpStatus::NOT_FOUND,
+                if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                        server_port, current, http::HttpStatus::NOT_FOUND,
                         &next))
                 {
                     if (!has_preserved_error_status)
@@ -633,7 +633,7 @@ Result<RequestProcessor::Output> RequestProcessor::process(
                                              : http::HttpStatus::FORBIDDEN;
             http::HttpRequest next;
             if (tryBuildErrorPageInternalRedirect_(
-                    router_, server_ip_, server_port_, current, err, &next))
+                    router_, server_ip, server_port, current, err, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -711,7 +711,7 @@ Result<RequestProcessor::Output> RequestProcessor::process(
                     {
                         http::HttpRequest next;
                         if (tryBuildErrorPageInternalRedirect_(router_,
-                                server_ip_, server_port_, current,
+                                server_ip, server_port, current,
                                 http::HttpStatus::FORBIDDEN, &next))
                         {
                             if (!has_preserved_error_status)
@@ -746,8 +746,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
 
             // index が無く、autoindex も無効の場合は 403
             http::HttpRequest next;
-            if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                    server_port_, current, http::HttpStatus::FORBIDDEN, &next))
+            if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                    server_port, current, http::HttpStatus::FORBIDDEN, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -764,8 +764,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         if (!S_ISREG(st.st_mode))
         {
             http::HttpRequest next;
-            if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                    server_port_, current, http::HttpStatus::NOT_FOUND, &next))
+            if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                    server_port, current, http::HttpStatus::NOT_FOUND, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -783,8 +783,8 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         if (fd < 0)
         {
             http::HttpRequest next;
-            if (tryBuildErrorPageInternalRedirect_(router_, server_ip_,
-                    server_port_, current, http::HttpStatus::NOT_FOUND, &next))
+            if (tryBuildErrorPageInternalRedirect_(router_, server_ip,
+                    server_port, current, http::HttpStatus::NOT_FOUND, &next))
             {
                 if (!has_preserved_error_status)
                 {
@@ -821,13 +821,14 @@ Result<RequestProcessor::Output> RequestProcessor::process(
 }
 
 Result<RequestProcessor::Output> RequestProcessor::processError(
-    const http::HttpRequest& request, const http::HttpStatus& error_status,
+    const http::HttpRequest& request, const IPAddress& server_ip,
+    const PortType& server_port, const http::HttpStatus& error_status,
     http::HttpResponse& out_response)
 {
     // まずは設定に沿った error_page（内部URI）を探す。
     std::string target;
     Result<LocationRouting> route_result =
-        router_.route(request, server_ip_, server_port_);
+        router_.route(request, server_ip, server_port);
     if (route_result.isOk())
     {
         LocationRouting route = route_result.unwrap();
@@ -840,7 +841,8 @@ Result<RequestProcessor::Output> RequestProcessor::processError(
                 if (ir.isOk())
                 {
                     out_response.reset();
-                    Result<Output> pr = process(ir.unwrap(), out_response);
+                    Result<Output> pr = process(
+                        ir.unwrap(), server_ip, server_port, out_response);
                     if (pr.isOk() && out_response.getStatus().isSuccess())
                     {
                         // コンテンツは内部URIの結果を使い、ステータスだけ元の

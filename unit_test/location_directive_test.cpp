@@ -1,4 +1,4 @@
-#include "server/request_router/location_directive.hpp"
+#include "server/http_processing_module/request_router/location_directive.hpp"
 
 #include <gtest/gtest.h>
 

@@ -8,7 +8,7 @@
 #include "network/ip_address.hpp"
 #include "network/port_type.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "server/request_router/location_directive.hpp"
+#include "server/http_processing_module/request_router/location_directive.hpp"
 
 namespace server
 {

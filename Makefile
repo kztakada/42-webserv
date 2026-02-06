@@ -74,7 +74,7 @@ TEST_PROD_SRCS ?= \
 		srcs/server/session/fd_session/http_session/body_source.cpp \
 		srcs/server/session/fd_session/http_session.cpp \
 		srcs/server/session/fd_session/http_session/http_session_watch.cpp \
-			srcs/server/session/fd_session/http_session/session_cgi_handler.cpp \
+			srcs/server/http_processing_module/session_cgi_handler.cpp \
 			srcs/server/session/fd_session/http_session/session_context.cpp \
 			srcs/server/session/fd_session/http_session/http_session_helpers.cpp \
 		srcs/server/session/fd_session/http_session/http_session_event.cpp \
@@ -88,16 +88,16 @@ TEST_PROD_SRCS ?= \
 		srcs/server/session/fd_session/http_session/http_response_writer.cpp \
 	srcs/server/session/fd_session/http_session/body_store.cpp \
 	srcs/server/session/fd_session/http_session/http_request_handler.cpp \
-	srcs/server/session/fd_session/http_session/request_dispatcher.cpp \
+	srcs/server/http_processing_module/request_dispatcher.cpp \
 	srcs/server/session/fd_session/http_session/actions/execute_cgi_action.cpp \
 	srcs/server/session/fd_session/http_session/actions/process_request_action.cpp \
 	srcs/server/session/fd_session/http_session/actions/send_error_action.cpp \
-	srcs/server/request_processor/request_processor.cpp \
-	srcs/server/request_router/location_directive.cpp \
-	srcs/server/request_router/location_routing.cpp \
-	srcs/server/request_router/resolved_request_context.cpp \
-	srcs/server/request_router/virtual_server.cpp \
-	srcs/server/request_router/request_router.cpp \
+	srcs/server/http_processing_module/request_processor.cpp \
+	srcs/server/http_processing_module/request_router/location_directive.cpp \
+	srcs/server/http_processing_module/request_router/location_routing.cpp \
+	srcs/server/http_processing_module/request_router/resolved_request_context.cpp \
+	srcs/server/http_processing_module/request_router/virtual_server.cpp \
+	srcs/server/http_processing_module/request_router/request_router.cpp \
 	srcs/server/config/location_directive_conf.cpp \
 	srcs/server/config/parser/config_parser.cpp \
 	srcs/server/config/virtual_server_conf.cpp \

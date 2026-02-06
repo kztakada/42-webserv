@@ -3,7 +3,7 @@
 
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
-#include "server/request_router/request_router.hpp"
+#include "server/http_processing_module/request_router/request_router.hpp"
 #include "server/session/fd_session/http_session/body_source.hpp"
 #include "utils/result.hpp"
 
@@ -27,12 +27,12 @@ class RequestProcessor
         Output() : body_source(NULL), should_close_connection(false) {}
     };
 
-    RequestProcessor(const RequestRouter& router, const IPAddress& server_ip,
-        const PortType& server_port);
+    explicit RequestProcessor(const RequestRouter& router);
     ~RequestProcessor();
 
-    Result<Output> process(
-        const http::HttpRequest& request, http::HttpResponse& out_response);
+    Result<Output> process(const http::HttpRequest& request,
+        const IPAddress& server_ip, const PortType& server_port,
+        http::HttpResponse& out_response);
 
     // パースエラー等で「明示的にエラーステータスが決まっている」場合に
     // error_page を適用してレスポンス（body含む）を生成する。
@@ -40,12 +40,11 @@ class RequestProcessor
     //   ステータスは error_status のままにする。
     // - 適用できない場合はデフォルトHTMLエラーページにフォールバック。
     Result<Output> processError(const http::HttpRequest& request,
+        const IPAddress& server_ip, const PortType& server_port,
         const http::HttpStatus& error_status, http::HttpResponse& out_response);
 
    private:
     const RequestRouter& router_;
-    IPAddress server_ip_;
-    PortType server_port_;
 
     RequestProcessor();
     RequestProcessor(const RequestProcessor& rhs);

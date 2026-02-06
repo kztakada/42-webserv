@@ -9,10 +9,10 @@ namespace server
 {
 
 ListenerSession::ListenerSession(TcpListenSocketFd* listen_fd,
-    FdSessionController& controller, const RequestRouter& router)
+    FdSessionController& controller, HttpProcessingModule& module)
     : FdSession(controller, kNoTimeoutSeconds),
       listen_fd_(listen_fd),
-      router_(router)
+      module_(module)
 {
     updateLastActiveTime();
 }
@@ -77,7 +77,7 @@ void ListenerSession::acceptNewConnection()
             continue;
 
         FdSession* s =
-            new HttpSession(fd, server_addr, client_addr, controller_, router_);
+            new HttpSession(fd, server_addr, client_addr, controller_, module_);
         Result<void> d = controller_.delegateSession(s);
         if (d.isError())
         {

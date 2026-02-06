@@ -1,9 +1,10 @@
-#include "server/session/fd_session/http_session/request_dispatcher.hpp"
+#include "server/http_processing_module/request_dispatcher.hpp"
 
 #include <fcntl.h>
 #include <unistd.h>
-#include <cstdio>
+
 #include <cctype>
+#include <cstdio>
 
 #include "server/session/fd_session/http_session/actions/execute_cgi_action.hpp"
 #include "server/session/fd_session/http_session/actions/process_request_action.hpp"
@@ -176,9 +177,7 @@ static void cleanupDestinationFile_(const std::string& path)
 
 }  // namespace
 
-RequestDispatcher::RequestDispatcher()
-{
-}
+RequestDispatcher::RequestDispatcher() {}
 
 Result<void> RequestDispatcher::consumeFromRecvBuffer(SessionContext& ctx)
 {
@@ -190,14 +189,16 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
     Result<void> ready = ctx.request_handler.onRequestReady();
     if (ready.isError())
     {
-        utils::Log::error("Dispatcher: onRequestReady failed: ", ready.getErrorMessage());
+        utils::Log::error(
+            "Dispatcher: onRequestReady failed: ", ready.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
     Result<void> fu = finalizeUploadStoreIfNeeded_(ctx);
     if (fu.isError())
     {
-        utils::Log::error("Dispatcher: finalizeUploadStore failed: ", fu.getErrorMessage());
+        utils::Log::error(
+            "Dispatcher: finalizeUploadStore failed: ", fu.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
@@ -209,15 +210,16 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
     return new ProcessRequestAction();
 }
 
-Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(SessionContext& ctx)
+Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
+    SessionContext& ctx)
 {
     if (ctx.request.getMethod() != http::HttpMethod::POST)
         return Result<void>();
     if (ctx.request.getContentType() != http::ContentType::MULTIPART_FORM_DATA)
         return Result<void>();
 
-    Result<LocationRouting> route =
-        ctx.router.route(ctx.request, ctx.socket_fd.getServerIp(), ctx.socket_fd.getServerPort());
+    Result<LocationRouting> route = ctx.router.route(ctx.request,
+        ctx.socket_fd.getServerIp(), ctx.socket_fd.getServerPort());
     if (route.isError())
         return Result<void>(ERROR, route.getErrorMessage());
     if (route.unwrap().getNextAction() != STORE_BODY)

@@ -38,8 +38,9 @@ Result<void> HttpSession::setSimpleErrorResponse_(
     return Result<void>();
 }
 
-// RequestProcessor::Output を使って context_.body_source / context_.response_writer
-// を差し替える。 既存の writer/body_source は必要に応じて破棄する。
+// RequestProcessor::Output を使って context_.body_source /
+// context_.response_writer を差し替える。 既存の writer/body_source
+// は必要に応じて破棄する。
 void HttpSession::installBodySourceAndWriter_(BodySource* body_source)
 {
     if (context_.response_writer != NULL)
@@ -55,8 +56,10 @@ void HttpSession::installBodySourceAndWriter_(BodySource* body_source)
 
     context_.body_source = body_source;
 
-    http::HttpResponseEncoder::Options opt = makeEncoderOptions_(context_.request);
-    context_.response_writer = new HttpResponseWriter(context_.response, opt, context_.body_source);
+    http::HttpResponseEncoder::Options opt =
+        makeEncoderOptions_(context_.request);
+    context_.response_writer =
+        new HttpResponseWriter(context_.response, opt, context_.body_source);
 }
 
 // processError を試み、失敗したら setSimpleErrorResponse_
@@ -65,8 +68,9 @@ void HttpSession::installBodySourceAndWriter_(BodySource* body_source)
 Result<void> HttpSession::buildErrorOutput_(
     http::HttpStatus status, RequestProcessor::Output* out)
 {
-    Result<RequestProcessor::Output> per =
-        processor_.processError(context_.request, status, context_.response);
+    Result<RequestProcessor::Output> per = module_.processor.processError(
+        context_.request, context_.socket_fd.getServerIp(),
+        context_.socket_fd.getServerPort(), status, context_.response);
     if (per.isOk())
     {
         *out = per.unwrap();
@@ -85,8 +89,9 @@ Result<void> HttpSession::buildErrorOutput_(
 Result<void> HttpSession::buildProcessorOutputOrServerError_(
     RequestProcessor::Output* out)
 {
-    Result<RequestProcessor::Output> pr =
-        processor_.process(context_.request, context_.response);
+    Result<RequestProcessor::Output> pr = module_.processor.process(
+        context_.request, context_.socket_fd.getServerIp(),
+        context_.socket_fd.getServerPort(), context_.response);
     if (pr.isOk())
     {
         *out = pr.unwrap();

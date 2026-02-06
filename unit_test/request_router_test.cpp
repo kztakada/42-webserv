@@ -1,4 +1,4 @@
-#include "server/request_router/request_router.hpp"
+#include "server/http_processing_module/request_router/request_router.hpp"
 
 #include <gtest/gtest.h>
 

@@ -1,4 +1,4 @@
-#include "server/request_router/resolved_request_context.hpp"
+#include "server/http_processing_module/request_router/resolved_request_context.hpp"
 
 namespace server
 {

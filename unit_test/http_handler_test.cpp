@@ -1,5 +1,3 @@
-#include "server/session/fd_session/http_session/http_request_handler.hpp"
-
 #include <gtest/gtest.h>
 #include <unistd.h>
 
@@ -11,7 +9,8 @@
 #include "server/config/location_directive_conf.hpp"
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "server/request_router/request_router.hpp"
+#include "server/http_processing_module/request_router/request_router.hpp"
+#include "server/session/fd_session/http_session/http_request_handler.hpp"
 
 using utils::result::Result;
 

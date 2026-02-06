@@ -6,8 +6,8 @@
 
 #include "http/status.hpp"
 #include "server/config/server_config.hpp"
+#include "server/http_processing_module/http_processing_module.hpp"
 #include "server/reactor/fd_event_reactor.hpp"
-#include "server/request_router/request_router.hpp"
 #include "server/session/fd_session_controller.hpp"
 #include "utils/result.hpp"
 
@@ -41,7 +41,7 @@ class Server
     // コンポーネント
     FdEventReactor* reactor_;
     FdSessionController* session_controller_;
-    RequestRouter* router_;
+    HttpProcessingModule* http_processing_module_;
 
     // 設定オブジェクト
     ServerConfig config_;

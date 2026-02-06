@@ -11,7 +11,7 @@
 #include "network/port_type.hpp"
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "server/request_processor/request_processor.hpp"
+#include "server/http_processing_module/request_processor.hpp"
 #include "utils/byte.hpp"
 
 static std::vector<utils::Byte> toBytes_(const std::string& s)
@@ -108,14 +108,14 @@ TEST(RequestProcessor, NotFoundAppliesErrorPageAndPreserves404)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     http::HttpRequest req = mustParseRequest_(
         "GET /missing.txt HTTP/1.1\r\nHost: example.com\r\n\r\n");
 
     http::HttpResponse resp;
     utils::result::Result<server::RequestProcessor::Output> out =
-        proc.process(req, resp);
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 404u);
@@ -158,7 +158,7 @@ TEST(RequestProcessor, ForbiddenAppliesErrorPageAndPreserves403)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     // /dir/ はディレクトリで、index/autoindex が無いので 403 になる。
     http::HttpRequest req =
@@ -166,7 +166,7 @@ TEST(RequestProcessor, ForbiddenAppliesErrorPageAndPreserves403)
 
     http::HttpResponse resp;
     utils::result::Result<server::RequestProcessor::Output> out =
-        proc.process(req, resp);
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 403u);
@@ -208,14 +208,15 @@ TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     http::HttpRequest req =
         mustParseRequest_("GET /any HTTP/1.1\r\nHost: example.com\r\n\r\n");
 
     http::HttpResponse resp;
     utils::result::Result<server::RequestProcessor::Output> out =
-        proc.processError(req, http::HttpStatus::SERVER_ERROR, resp);
+        proc.processError(req, ip.unwrap(), port.unwrap(),
+            http::HttpStatus::SERVER_ERROR, resp);
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 500u);
@@ -258,7 +259,7 @@ TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     const std::string methods[] = {
         "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE",
@@ -268,13 +269,13 @@ TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
     for (size_t i = 0; i < (sizeof(methods) / sizeof(methods[0])); ++i)
     {
         http::HttpRequest req = mustParseRequest_(
-            methods[i] +
-            std::string(" /any HTTP/1.1\r\nHost: "
-                        "example.com\r\nContent-Length: 0\r\n\r\n"));
+            methods[i] + std::string(
+                             " /any HTTP/1.1\r\nHost: "
+                             "example.com\r\nContent-Length: 0\r\n\r\n"));
 
         http::HttpResponse resp;
         utils::result::Result<server::RequestProcessor::Output> out =
-            proc.process(req, resp);
+            proc.process(req, ip.unwrap(), port.unwrap(), resp);
         ASSERT_TRUE(out.isOk());
 
         EXPECT_EQ(resp.getStatus().getCode(), 501u);
@@ -312,14 +313,14 @@ TEST(RequestProcessor, NotFoundUsesDefaultErrorPageWhenNoCustom)
     utils::result::Result<PortType> port = PortType::parseNumeric("8080");
     ASSERT_TRUE(port.isOk());
 
-    server::RequestProcessor proc(router, ip.unwrap(), port.unwrap());
+    server::RequestProcessor proc(router);
 
     http::HttpRequest req = mustParseRequest_(
         "GET /missing.txt HTTP/1.1\r\nHost: example.com\r\n\r\n");
 
     http::HttpResponse resp;
     utils::result::Result<server::RequestProcessor::Output> out =
-        proc.process(req, resp);
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 404u);

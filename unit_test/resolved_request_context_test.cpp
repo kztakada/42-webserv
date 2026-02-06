@@ -1,7 +1,8 @@
+#include "server/http_processing_module/request_router/resolved_request_context.hpp"
+
 #include <gtest/gtest.h>
 
 #include "http/http_request.hpp"
-#include "server/request_router/resolved_request_context.hpp"
 
 static std::vector<utils::Byte> toBytes(const char* s)
 {

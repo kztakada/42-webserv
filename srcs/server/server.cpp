@@ -37,13 +37,13 @@ Result<Server*> Server::create(const ServerConfig& config)
 Server::Server(const ServerConfig& config)
     : reactor_(FdEventReactorFactory::create()),
       session_controller_(NULL),
-      router_(NULL),
+      http_processing_module_(NULL),
       config_(config),
       should_stop_(0),
       is_running_(false)
 {
     session_controller_ = new FdSessionController(reactor_, false);
-    router_ = new RequestRouter(config_);
+    http_processing_module_ = new HttpProcessingModule(config_);
 }
 
 Server::~Server()
@@ -55,10 +55,10 @@ Server::~Server()
         delete session_controller_;
         session_controller_ = NULL;
     }
-    if (router_ != NULL)
+    if (http_processing_module_ != NULL)
     {
-        delete router_;
-        router_ = NULL;
+        delete http_processing_module_;
+        http_processing_module_ = NULL;
     }
     if (reactor_ != NULL)
     {
@@ -125,7 +125,8 @@ Result<void> Server::initialize()
     if (!config_.isValid())
         return Result<void>(ERROR, "server config is invalid");
 
-    if (reactor_ == NULL || session_controller_ == NULL || router_ == NULL)
+    if (reactor_ == NULL || session_controller_ == NULL ||
+        http_processing_module_ == NULL)
         return Result<void>(ERROR, "server components are not initialized");
 
     std::vector<Listen> listens = config_.getListens();
@@ -140,7 +141,7 @@ Result<void> Server::initialize()
             return Result<void>(ERROR, listen_fd.getErrorMessage());
 
         ListenerSession* listener = new ListenerSession(
-            listen_fd.unwrap(), *session_controller_, *router_);
+            listen_fd.unwrap(), *session_controller_, *http_processing_module_);
 
         Result<void> d = session_controller_->delegateSession(listener);
         if (d.isError())

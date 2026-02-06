@@ -15,6 +15,8 @@ class IHttpSessionState
     virtual ~IHttpSessionState() {}
     virtual utils::result::Result<void> handleEvent(
         HttpSession& context, const FdEvent& event) = 0;
+    virtual void getWatchFlags(const HttpSession& session, bool* want_read,
+        bool* want_write) const = 0;
 };
 
 }  // namespace server

@@ -11,6 +11,8 @@ class RecvRequestState : public IHttpSessionState
    public:
     virtual utils::result::Result<void> handleEvent(
         HttpSession& context, const FdEvent& event);
+    virtual void getWatchFlags(
+        const HttpSession& session, bool* want_read, bool* want_write) const;
 };
 
 class ExecuteCgiState : public IHttpSessionState
@@ -18,6 +20,8 @@ class ExecuteCgiState : public IHttpSessionState
    public:
     virtual utils::result::Result<void> handleEvent(
         HttpSession& context, const FdEvent& event);
+    virtual void getWatchFlags(
+        const HttpSession& session, bool* want_read, bool* want_write) const;
 };
 
 class SendResponseState : public IHttpSessionState
@@ -25,6 +29,8 @@ class SendResponseState : public IHttpSessionState
    public:
     virtual utils::result::Result<void> handleEvent(
         HttpSession& context, const FdEvent& event);
+    virtual void getWatchFlags(
+        const HttpSession& session, bool* want_read, bool* want_write) const;
 };
 
 class CloseWaitState : public IHttpSessionState
@@ -32,6 +38,8 @@ class CloseWaitState : public IHttpSessionState
    public:
     virtual utils::result::Result<void> handleEvent(
         HttpSession& context, const FdEvent& event);
+    virtual void getWatchFlags(
+        const HttpSession& session, bool* want_read, bool* want_write) const;
 };
 
 }  // namespace server

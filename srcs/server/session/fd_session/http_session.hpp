@@ -115,10 +115,6 @@ class HttpSession : public FdSession
         http::HttpStatus status, RequestProcessor::Output* out);
     Result<void> buildProcessorOutputOrServerError_(
         RequestProcessor::Output* out);
-    static http::HttpResponseEncoder::Options makeEncoderOptions_(
-        const http::HttpRequest& request);
-    static Result<void> setSimpleErrorResponse_(
-        http::HttpResponse& response, http::HttpStatus status);
 };
 
 }  // namespace server

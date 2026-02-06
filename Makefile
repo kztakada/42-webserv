@@ -75,6 +75,7 @@ TEST_PROD_SRCS ?= \
 		srcs/server/session/fd_session/http_session.cpp \
 		srcs/server/session/fd_session/http_session/http_session_watch.cpp \
 			srcs/server/http_processing_module/session_cgi_handler.cpp \
+			srcs/server/http_processing_module/http_processing_module_utils.cpp \
 			srcs/server/session/fd_session/http_session/session_context.cpp \
 			srcs/server/session/fd_session/http_session/http_session_helpers.cpp \
 		srcs/server/session/fd_session/http_session/http_session_event.cpp \

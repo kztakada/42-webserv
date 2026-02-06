@@ -49,7 +49,7 @@ Result<void> HttpProcessingModule::buildErrorOutput(SessionContext& context,
     if (er.isError())
         return er;
 
-    out->body_source = NULL;
+    out->body_source.reset(NULL);
     out->should_close_connection = false;
     return Result<void>();
 }

@@ -172,12 +172,12 @@ Result<void> SessionCgiHandler::handleCgiError_(
     Result<void> bo = session.buildErrorOutput_(st, &out);
     if (bo.isError())
     {
-        out.body_source = NULL;
+        out.body_source.reset(NULL);
         out.should_close_connection = false;
     }
     ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-    session.installBodySourceAndWriter_(out.body_source);
+    session.installBodySourceAndWriter_(out.body_source.release());
 
     ctx.should_close_connection =
         ctx.should_close_connection || ctx.peer_closed ||
@@ -215,12 +215,12 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(
             session.buildErrorOutput_(http::HttpStatus::BAD_GATEWAY, &out);
         if (bo.isError())
         {
-            out.body_source = NULL;
+            out.body_source.reset(NULL);
             out.should_close_connection = false;
         }
         ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-        session.installBodySourceAndWriter_(out.body_source);
+        session.installBodySourceAndWriter_(out.body_source.release());
 
         ctx.should_close_connection =
             ctx.should_close_connection || ctx.peer_closed ||
@@ -269,7 +269,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(
             return bo;
         ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-        session.installBodySourceAndWriter_(out.body_source);
+        session.installBodySourceAndWriter_(out.body_source.release());
 
         ctx.should_close_connection =
             ctx.should_close_connection || ctx.peer_closed ||

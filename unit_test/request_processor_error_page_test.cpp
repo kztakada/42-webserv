@@ -119,12 +119,13 @@ TEST(RequestProcessor, NotFoundAppliesErrorPageAndPreserves404)
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 404u);
-    ASSERT_TRUE(out.unwrap().body_source != NULL);
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
 
-    std::string body = readAll_(out.unwrap().body_source);
+    std::string body = readAll_(o.body_source.get());
     EXPECT_EQ(body, std::string("Custom404"));
 
-    delete out.unwrap().body_source;
+    (void)root;
 }
 
 TEST(RequestProcessor, ForbiddenAppliesErrorPageAndPreserves403)
@@ -170,12 +171,13 @@ TEST(RequestProcessor, ForbiddenAppliesErrorPageAndPreserves403)
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 403u);
-    ASSERT_TRUE(out.unwrap().body_source != NULL);
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
 
-    std::string body = readAll_(out.unwrap().body_source);
+    std::string body = readAll_(o.body_source.get());
     EXPECT_EQ(body, std::string("Custom403"));
 
-    delete out.unwrap().body_source;
+    (void)root;
 }
 
 TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
@@ -220,12 +222,13 @@ TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 500u);
-    ASSERT_TRUE(out.unwrap().body_source != NULL);
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
 
-    std::string body = readAll_(out.unwrap().body_source);
+    std::string body = readAll_(o.body_source.get());
     EXPECT_EQ(body, std::string("Custom500"));
 
-    delete out.unwrap().body_source;
+    (void)root;
 }
 
 TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
@@ -279,13 +282,14 @@ TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
         ASSERT_TRUE(out.isOk());
 
         EXPECT_EQ(resp.getStatus().getCode(), 501u);
-        ASSERT_TRUE(out.unwrap().body_source != NULL);
+        server::RequestProcessor::Output o = out.unwrap();
+        ASSERT_TRUE(o.body_source.get() != NULL);
 
-        std::string body = readAll_(out.unwrap().body_source);
+        std::string body = readAll_(o.body_source.get());
         EXPECT_EQ(body, std::string("Custom501"));
-
-        delete out.unwrap().body_source;
     }
+
+    (void)root;
 }
 
 TEST(RequestProcessor, NotFoundUsesDefaultErrorPageWhenNoCustom)
@@ -324,11 +328,12 @@ TEST(RequestProcessor, NotFoundUsesDefaultErrorPageWhenNoCustom)
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 404u);
-    ASSERT_TRUE(out.unwrap().body_source != NULL);
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
 
-    std::string body = readAll_(out.unwrap().body_source);
+    std::string body = readAll_(o.body_source.get());
     EXPECT_NE(body.find("404"), std::string::npos);
     EXPECT_NE(body.find("Not Found"), std::string::npos);
 
-    delete out.unwrap().body_source;
+    (void)root;
 }

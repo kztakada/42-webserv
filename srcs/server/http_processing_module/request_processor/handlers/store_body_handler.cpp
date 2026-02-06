@@ -48,7 +48,7 @@ Result<HandlerResult> StoreBodyHandler::handle(const LocationRouting& route,
 
     HandlerResult res;
     (void)out_response.setExpectedContentLength(0);
-    res.output.body_source = NULL;
+    res.output.body_source.reset(NULL);
     res.output.should_close_connection = false;
     return res;
 }

@@ -117,12 +117,13 @@ TEST(RequestProcessor, AutoIndexReturnsDirectoryListingHtml)
     ASSERT_TRUE(out.isOk());
 
     EXPECT_EQ(resp.getStatus().getCode(), 200u);
-    ASSERT_TRUE(out.unwrap().body_source != NULL);
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
 
-    std::string body = readAll_(out.unwrap().body_source);
+    std::string body = readAll_(o.body_source.get());
     EXPECT_NE(body.find("Index of /dir/"), std::string::npos);
     EXPECT_NE(body.find("a.txt"), std::string::npos);
     EXPECT_NE(body.find("sub/"), std::string::npos);
 
-    delete out.unwrap().body_source;
+    (void)root;
 }

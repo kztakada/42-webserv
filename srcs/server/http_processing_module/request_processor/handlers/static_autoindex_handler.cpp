@@ -157,7 +157,7 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
 
             HandlerResult res;
             (void)out_response.setExpectedContentLength(0);
-            res.output.body_source = NULL;
+            res.output.body_source.reset(NULL);
             res.output.should_close_connection = false;
             return res;
         }
@@ -201,7 +201,7 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
 
             HandlerResult res;
             (void)out_response.setExpectedContentLength(0);
-            res.output.body_source = NULL;
+            res.output.body_source.reset(NULL);
             res.output.should_close_connection = false;
             return res;
         }
@@ -272,7 +272,8 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
                     static_cast<unsigned long>(body.unwrap().size()));
 
                 HandlerResult res;
-                res.output.body_source = new StringBodySource(body.unwrap());
+                res.output.body_source.reset(
+                    new StringBodySource(body.unwrap()));
                 res.output.should_close_connection = false;
                 return res;
             }

@@ -48,7 +48,7 @@ Result<RequestProcessorOutput> StaticFileResponder::respondFile(
     http::ContentType ct = http::ContentType::fromExtension(ext);
     (void)out_response.setHeader("Content-Type", ct.c_str());
 
-    out.body_source = new FileBodySource(fd, size);
+    out.body_source.reset(new FileBodySource(fd, size));
     out.should_close_connection = false;
     return out;
 }

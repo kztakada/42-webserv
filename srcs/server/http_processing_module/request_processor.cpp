@@ -54,6 +54,9 @@ Result<RequestProcessor::Output> RequestProcessor::process(
         HandlerResult result = handled.unwrap();
         if (result.should_continue)
         {
+            // 内部リダイレクト（error_page の内部URI等）で次のリクエストへ
+            // 進む場合、途中まで構築されたレスポンスを引き継がない。
+            out_response.reset();
             state.current = result.next_request;
             continue;
         }
@@ -92,16 +95,6 @@ Result<RequestProcessor::Output> RequestProcessor::processError(
                         // エラーに戻す。
                         (void)out_response.setStatus(error_status);
                         return pr.unwrap();
-                    }
-
-                    if (pr.isOk())
-                    {
-                        Output o = pr.unwrap();
-                        if (o.body_source != NULL)
-                        {
-                            delete o.body_source;
-                            o.body_source = NULL;
-                        }
                     }
                 }
             }

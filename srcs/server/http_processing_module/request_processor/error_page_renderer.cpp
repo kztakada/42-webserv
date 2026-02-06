@@ -101,7 +101,7 @@ Result<RequestProcessorOutput> ErrorPageRenderer::respond(
     (void)out_response.setExpectedContentLength(
         static_cast<unsigned long>(body.size()));
 
-    out.body_source = new StringBodySource(body);
+    out.body_source.reset(new StringBodySource(body));
     out.should_close_connection = false;
     return out;
 }

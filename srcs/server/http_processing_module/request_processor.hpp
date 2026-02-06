@@ -3,6 +3,12 @@
 
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
+#include "server/http_processing_module/request_processor/action_handler_factory.hpp"
+#include "server/http_processing_module/request_processor/autoindex_renderer.hpp"
+#include "server/http_processing_module/request_processor/error_page_renderer.hpp"
+#include "server/http_processing_module/request_processor/internal_redirect_resolver.hpp"
+#include "server/http_processing_module/request_processor/request_processor_output.hpp"
+#include "server/http_processing_module/request_processor/static_file_responder.hpp"
 #include "server/http_processing_module/request_router/request_router.hpp"
 #include "server/session/fd_session/http_session/body_source.hpp"
 #include "utils/result.hpp"
@@ -18,14 +24,7 @@ using namespace utils::result;
 class RequestProcessor
 {
    public:
-    struct Output
-    {
-        BodySource* body_source;       // 呼び出し側が delete
-        bool should_close_connection;  // HTTP/1.0 等で close-delimited
-                                       // が必要な場合
-
-        Output() : body_source(NULL), should_close_connection(false) {}
-    };
+    typedef RequestProcessorOutput Output;
 
     explicit RequestProcessor(const RequestRouter& router);
     ~RequestProcessor();
@@ -45,6 +44,11 @@ class RequestProcessor
 
    private:
     const RequestRouter& router_;
+    AutoIndexRenderer autoindex_renderer_;
+    ErrorPageRenderer error_renderer_;
+    InternalRedirectResolver internal_redirect_;
+    StaticFileResponder file_responder_;
+    ActionHandlerFactory handler_factory_;
 
     RequestProcessor();
     RequestProcessor(const RequestProcessor& rhs);

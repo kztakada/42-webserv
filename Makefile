@@ -94,6 +94,17 @@ TEST_PROD_SRCS ?= \
 	srcs/server/session/fd_session/http_session/actions/process_request_action.cpp \
 	srcs/server/session/fd_session/http_session/actions/send_error_action.cpp \
 	srcs/server/http_processing_module/request_processor.cpp \
+	srcs/server/http_processing_module/request_processor/autoindex_renderer.cpp \
+	srcs/server/http_processing_module/request_processor/action_handler_factory.cpp \
+	srcs/server/http_processing_module/request_processor/handlers/internal_redirect_handler.cpp \
+	srcs/server/http_processing_module/request_processor/handlers/redirect_external_handler.cpp \
+	srcs/server/http_processing_module/request_processor/handlers/respond_error_handler.cpp \
+	srcs/server/http_processing_module/request_processor/handlers/store_body_handler.cpp \
+	srcs/server/http_processing_module/request_processor/handlers/static_autoindex_handler.cpp \
+	srcs/server/http_processing_module/request_processor/config_text_loader.cpp \
+	srcs/server/http_processing_module/request_processor/error_page_renderer.cpp \
+	srcs/server/http_processing_module/request_processor/internal_redirect_resolver.cpp \
+	srcs/server/http_processing_module/request_processor/static_file_responder.cpp \
 	srcs/server/http_processing_module/request_router/location_directive.cpp \
 	srcs/server/http_processing_module/request_router/location_routing.cpp \
 	srcs/server/http_processing_module/request_router/resolved_request_context.cpp \

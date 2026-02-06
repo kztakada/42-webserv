@@ -20,10 +20,10 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
          context.changeState(new CloseWaitState());
          context.socket_fd_.shutdown();
 
-         if (context.active_cgi_session_ != NULL)
+         if (context.cgi_handler_.getActiveCgiSession() != NULL)
          {
-             context.controller_.requestDelete(context.active_cgi_session_);
-             context.active_cgi_session_ = NULL;
+             context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());
+             context.cgi_handler_.clearActiveCgiSession();
          }
          context.controller_.requestDelete(&context);
          return Result<void>();
@@ -89,10 +89,10 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
             context.changeState(new CloseWaitState());
             context.socket_fd_.shutdown();
 
-            if (context.active_cgi_session_ != NULL)
+            if (context.cgi_handler_.getActiveCgiSession() != NULL)
             {
-                context.controller_.requestDelete(context.active_cgi_session_);
-                context.active_cgi_session_ = NULL;
+                context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());
+                context.cgi_handler_.clearActiveCgiSession();
             }
             context.controller_.requestDelete(&context);
             return Result<void>();
@@ -101,10 +101,6 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
         // Keep-Alive: 次のリクエストへ
         context.changeState(new RecvRequestState());
         // バッファに残っているデータを処理
-        // 注意: ここで consumeRecvBufferWithoutRead_ を呼ぶと、即座に次の State に遷移する可能性がある。
-        // State パターンでは遷移は呼び出し元 (handleEvent) で行われるが、
-        // ここで再帰的に次のステートの処理を行うか、あるいはイベントループに戻るか。
-        // consumeRecvBufferWithoutRead_ は pending_state_ をセットするだけ。
         return context.consumeRecvBufferWithoutRead_();
     }
 

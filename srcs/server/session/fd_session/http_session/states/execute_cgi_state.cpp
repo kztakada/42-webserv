@@ -28,9 +28,9 @@ Result<void> ExecuteCgiState::handleEvent(HttpSession& context, const FdEvent& e
         context.changeState(new CloseWaitState());
         context.socket_fd_.shutdown();
         
-        if (context.active_cgi_session_ != NULL) {
-            context.controller_.requestDelete(context.active_cgi_session_);
-            context.active_cgi_session_ = NULL;
+        if (context.cgi_handler_.getActiveCgiSession() != NULL) {
+            context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());
+            context.cgi_handler_.clearActiveCgiSession();
         }
         context.controller_.requestDelete(&context);
     }

@@ -40,7 +40,7 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 
     if (handler_.getNextStep() == HttpHandler::EXECUTE_CGI)
     {
-        Result<void> sr = startCgi_();
+        Result<void> sr = cgi_handler_.startCgi();
         if (sr.isError())
         {
             RequestProcessor::Output out;

@@ -16,6 +16,7 @@
 #include "server/session/fd_session/http_session/http_handler.hpp"
 #include "server/session/fd_session/http_session/http_response_writer.hpp"
 #include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
+#include "server/session/fd_session/http_session/session_cgi_handler.hpp"
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
@@ -73,6 +74,9 @@ class HttpSession : public FdSession
     friend class ExecuteCgiState;
     friend class SendResponseState;
     friend class CloseWaitState;
+    friend class SessionCgiHandler;
+
+    SessionCgiHandler cgi_handler_; // CGIハンドラ
 
    private:
     // --- プロトコル解析・構築 ---
@@ -87,7 +91,7 @@ class HttpSession : public FdSession
     HttpHandler handler_;          // リクエスト解析・処理ハンドラ
     RequestProcessor processor_;   // リクエスト処理ユーティリティ
 
-    CgiSession* active_cgi_session_;  // 実行中のCGI（なければNULL）
+    // CgiSession* active_cgi_session_; // SessionCgiHandlerへ移動
 
     // --- データ転送関連 ---
     BodySource* body_source_;              // レスポンスボディ供給元（所有権あり）
@@ -111,18 +115,6 @@ class HttpSession : public FdSession
     HttpSession();
     HttpSession(const HttpSession& rhs);
     HttpSession& operator=(const HttpSession& rhs);
-
-    // http_session_cgi.cpp
-    Result<void> startCgi_();
-    // -- cgi notification handlers --
-    // http_session_cgi_notify_local_redirect.cpp
-    Result<void> handleCgiHeadersReadyLocalRedirect_(
-        CgiSession& cgi, const http::CgiResponse& cr);
-    // http_session_cgi_notify_normal.cpp
-    Result<void> handleCgiHeadersReadyNormal_(
-        CgiSession& cgi, const http::CgiResponse& cr);
-    // http_session_cgi_notify_error.cpp
-    Result<void> handleCgiError_(CgiSession& cgi, const std::string& message);
 
     // http_session_redirect.cpp
     Result<http::HttpRequest> buildInternalRedirectRequest_(

@@ -17,6 +17,7 @@
 #include "server/session/fd_session/http_session/request_dispatcher.hpp"
 #include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
 #include "server/session/fd_session/http_session/session_cgi_handler.hpp"
+#include "server/session/fd_session/http_session/session_context.hpp"
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
@@ -48,8 +49,8 @@ class HttpSession : public FdSession
     static const size_t kMaxRecvBufferBytes = 64 * 1024;
 
     // テスト用
-    const HttpRequest& request() const { return request_; }
-    const HttpResponse& response() const { return response_; }
+    const HttpRequest& request() const { return context_.request; }
+    const HttpResponse& response() const { return context_.response; }
 
     // コンストラクタ・デストラクタ
     HttpSession(int fd, const SocketAddress& server_addr,
@@ -73,6 +74,9 @@ class HttpSession : public FdSession
     // 状態遷移
     void changeState(IHttpSessionState* next_state);
 
+    SessionContext& getContext() { return context_; }
+    const SessionContext& getContext() const { return context_; }
+
     friend class RecvRequestState;
     friend class ExecuteCgiState;
     friend class SendResponseState;
@@ -83,39 +87,13 @@ class HttpSession : public FdSession
     friend class ExecuteCgiAction;
 
    private:
-    // --- プロトコル解析・構築 ---
-    HttpRequest request_;    // 動的なHTTPリクエスト
-    HttpResponse response_;  // 動的なHTTPレスポンス
-
-    // --- 所有しているリソース ---
-    TcpConnectionSocketFd socket_fd_;  // クライアントとのソケット
-
-    // --- 制御と外部連携 ---
-    const RequestRouter& router_;  // ListenerSession経由で渡される参照
-    RequestProcessor processor_;   // リクエスト処理ユーティリティ
-
+    SessionContext context_;
+    
     // --- サブモジュール ---
     SessionCgiHandler cgi_handler_; // CGIハンドラ
     RequestDispatcher dispatcher_;  // リクエストディスパッチャ
-
-    // --- データ転送関連 ---
-    BodySource* body_source_;              // レスポンスボディ供給元（所有権あり）
-    HttpResponseWriter* response_writer_;  // レスポンスエンコード・送信補助
-
-    // ソケットI/O用バッファ
-    IoBuffer recv_buffer_;  // クライアントからのデータ受信用
-    IoBuffer send_buffer_;  // クライアントへのデータ送信用
-
-    // --- 状態・制御 ---
-    IHttpSessionState* current_state_;  // 現在のステート
-    IHttpSessionState* pending_state_;  // 遷移予定のステート
-    bool is_complete_;                  // 完了フラグ
-
-    int redirect_count_;            // 内部リダイレクト回数
-    bool peer_closed_;              // クライアントがcloseしたか
-    bool should_close_connection_;  // レスポンス後に接続を閉じるべきか
-    bool socket_watch_read_;        // ソケット read イベント監視フラグ
-    bool socket_watch_write_;       // ソケット write イベント監視フラグ
+    
+    RequestProcessor processor_;   // リクエスト処理ユーティリティ
 
     HttpSession();
     HttpSession(const HttpSession& rhs);

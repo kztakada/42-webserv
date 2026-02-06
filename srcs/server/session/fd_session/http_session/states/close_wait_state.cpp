@@ -8,7 +8,7 @@ using namespace utils::result;
 
 Result<void> CloseWaitState::handleEvent(HttpSession& context, const FdEvent& event) {
     (void)event;
-    context.is_complete_ = true;
+    context.context_.is_complete = true;
     context.controller_.requestDelete(&context);
     return Result<void>();
 }

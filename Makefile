@@ -74,8 +74,9 @@ TEST_PROD_SRCS ?= \
 		srcs/server/session/fd_session/http_session/body_source.cpp \
 		srcs/server/session/fd_session/http_session.cpp \
 		srcs/server/session/fd_session/http_session/http_session_watch.cpp \
-		srcs/server/session/fd_session/http_session/session_cgi_handler.cpp \
-		srcs/server/session/fd_session/http_session/http_session_helpers.cpp \
+			srcs/server/session/fd_session/http_session/session_cgi_handler.cpp \
+			srcs/server/session/fd_session/http_session/session_context.cpp \
+			srcs/server/session/fd_session/http_session/http_session_helpers.cpp \
 		srcs/server/session/fd_session/http_session/http_session_event.cpp \
 		srcs/server/session/fd_session/http_session/states/recv_request_state.cpp \
 		srcs/server/session/fd_session/http_session/states/send_response_state.cpp \

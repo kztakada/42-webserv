@@ -11,52 +11,21 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
     const SocketAddress& client_addr, FdSessionController& controller,
     const RequestRouter& router)
     : FdSession(controller, kDefaultTimeoutSec),
-      request_(),
-      response_(),
-      socket_fd_(fd, server_addr, client_addr),
-      router_(router),
-      processor_(router_, socket_fd_.getServerIp(), socket_fd_.getServerPort()),
+      context_(fd, server_addr, client_addr, controller, router),
       cgi_handler_(*this),
-      dispatcher_(request_, response_, router, socket_fd_.getServerIp(),
-          socket_fd_.getServerPort(), this),
-      body_source_(NULL),
-      response_writer_(NULL),
-      recv_buffer_(),
-      send_buffer_(),
-      current_state_(new RecvRequestState()),
-      pending_state_(NULL),
-      is_complete_(false),
-      redirect_count_(0),
-      peer_closed_(false),
-      should_close_connection_(false),
-      socket_watch_read_(false),
-      socket_watch_write_(false)
+      dispatcher_(context_.request, context_.response, router,
+          context_.socket_fd.getServerIp(), context_.socket_fd.getServerPort(),
+          this),
+      processor_(router, context_.socket_fd.getServerIp(),
+          context_.socket_fd.getServerPort())
 {
+    context_.current_state = new RecvRequestState();
     updateLastActiveTime();
 }
 
 HttpSession::~HttpSession()
 {
-    if (pending_state_ != NULL)
-    {
-        delete pending_state_;
-        pending_state_ = NULL;
-    }
-    if (current_state_ != NULL)
-    {
-        delete current_state_;
-        current_state_ = NULL;
-    }
-    if (response_writer_ != NULL)
-    {
-        delete response_writer_;
-        response_writer_ = NULL;
-    }
-    if (body_source_ != NULL)
-    {
-        delete body_source_;
-        body_source_ = NULL;
-    }
+    // cleanup is handled by SessionContext destructor
 }
 
 void HttpSession::getInitialWatchSpecs(
@@ -65,18 +34,19 @@ void HttpSession::getInitialWatchSpecs(
     if (out == NULL)
         return;
     // 最初は read のみ watch し、書き込みは必要時だけ有効化する。
-    out->push_back(FdSession::FdWatchSpec(socket_fd_.getFd(), true, false));
+    out->push_back(
+        FdSession::FdWatchSpec(context_.socket_fd.getFd(), true, false));
 }
 
-bool HttpSession::isComplete() const { return is_complete_; }
+bool HttpSession::isComplete() const { return context_.is_complete; }
 
 void HttpSession::changeState(IHttpSessionState* next_state)
 {
-    if (pending_state_ != NULL)
+    if (context_.pending_state != NULL)
     {
-        delete pending_state_;
+        delete context_.pending_state;
     }
-    pending_state_ = next_state;
+    context_.pending_state = next_state;
 }
 
 Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)

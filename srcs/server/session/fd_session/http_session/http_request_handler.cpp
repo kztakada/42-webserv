@@ -16,7 +16,7 @@ HttpRequestHandler::HttpRequestHandler(HttpRequest& request, HttpResponse& respo
       server_ip_(server_ip),
       server_port_(server_port),
       body_store_(body_store_key),
-      body_sink_(request_, body_store_),
+      body_sink_(request, body_store_),
       has_routing_(false),
       location_routing_(),
       has_configured_body_store_for_upload_(false),

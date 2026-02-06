@@ -8,25 +8,25 @@ namespace server
 using namespace utils::result;
 
 Result<void> ExecuteCgiState::handleEvent(HttpSession& context, const FdEvent& event) {
-    if (event.fd == context.socket_fd_.getFd() && event.type == kReadEvent) {
-        if (context.recv_buffer_.size() < HttpSession::kMaxRecvBufferBytes) {
-            const ssize_t n = context.recv_buffer_.fillFromFd(context.socket_fd_.getFd());
+    if (event.fd == context.context_.socket_fd.getFd() && event.type == kReadEvent) {
+        if (context.context_.recv_buffer.size() < HttpSession::kMaxRecvBufferBytes) {
+            const ssize_t n = context.context_.recv_buffer.fillFromFd(context.context_.socket_fd.getFd());
             if (n == 0) {
-                context.peer_closed_ = true;
-                context.should_close_connection_ = true;
+                context.context_.peer_closed = true;
+                context.context_.should_close_connection = true;
             }
         }
         context.updateSocketWatches_();
     }
     
-    if (event.is_opposite_close && event.fd == context.socket_fd_.getFd()) {
-         context.peer_closed_ = true;
-         context.should_close_connection_ = true;
+    if (event.is_opposite_close && event.fd == context.context_.socket_fd.getFd()) {
+         context.context_.peer_closed = true;
+         context.context_.should_close_connection = true;
     }
 
-    if (context.peer_closed_) {
+    if (context.context_.peer_closed) {
         context.changeState(new CloseWaitState());
-        context.socket_fd_.shutdown();
+        context.context_.socket_fd.shutdown();
         
         if (context.cgi_handler_.getActiveCgiSession() != NULL) {
             context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());

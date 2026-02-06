@@ -11,12 +11,12 @@ Result<void> SendErrorAction::execute(HttpSession& session) {
     RequestProcessor::Output out;
     Result<void> bo = session.buildErrorOutput_(status_, &out);
     if (bo.isError()) return bo;
-    session.response_.setHttpVersion(session.request_.getHttpVersion());
+    session.context_.response.setHttpVersion(session.context_.request.getHttpVersion());
     session.installBodySourceAndWriter_(out.body_source);
 
-    session.should_close_connection_ = session.should_close_connection_ || session.peer_closed_ ||
+    session.context_.should_close_connection = session.context_.should_close_connection || session.context_.peer_closed ||
                                out.should_close_connection ||
-                               !session.request_.shouldKeepAlive() ||
+                               !session.context_.request.shouldKeepAlive() ||
                                session.dispatcher_.handler().shouldCloseConnection();
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();

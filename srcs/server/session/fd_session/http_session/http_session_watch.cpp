@@ -9,19 +9,19 @@ using namespace utils::result;
 
 Result<void> HttpSession::updateSocketWatches_()
 {
-    const int fd = socket_fd_.getFd();
+    const int fd = context_.socket_fd.getFd();
     if (fd < 0)
         return Result<void>();
 
     bool want_read = false;
     bool want_write = false;
 
-    IHttpSessionState* s = pending_state_ ? pending_state_ : current_state_;
+    IHttpSessionState* s = context_.pending_state ? context_.pending_state : context_.current_state;
 
     // dynamic_castで状態判定
     if (dynamic_cast<RecvRequestState*>(s))
     {
-        want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
+        want_read = (context_.recv_buffer.size() < kMaxRecvBufferBytes);
     }
     else if (dynamic_cast<SendResponseState*>(s))
     {
@@ -30,19 +30,19 @@ Result<void> HttpSession::updateSocketWatches_()
     else if (dynamic_cast<ExecuteCgiState*>(s))
     {
         // CGI 実行中も client close 検出のため read を見る。
-        // パイプラインの次リクエストは recv_buffer_ に溜める（上限あり）。
-        want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
+        // パイプラインの次リクエストは context_.recv_buffer に溜める（上限あり）。
+        want_read = (context_.recv_buffer.size() < kMaxRecvBufferBytes);
     }
     else if (dynamic_cast<CloseWaitState*>(s))
     {
         // CLOSE_WAIT: ソケットwatchなし。
     }
 
-    if (want_read == socket_watch_read_ && want_write == socket_watch_write_)
+    if (want_read == context_.socket_watch_read && want_write == context_.socket_watch_write)
         return Result<void>();
 
-    socket_watch_read_ = want_read;
-    socket_watch_write_ = want_write;
+    context_.socket_watch_read = want_read;
+    context_.socket_watch_write = want_write;
 
     Result<void> u = controller_.updateWatch(fd, want_read, want_write);
     if (u.isError())

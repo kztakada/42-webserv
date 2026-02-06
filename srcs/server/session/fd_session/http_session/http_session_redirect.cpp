@@ -14,12 +14,12 @@ Result<http::HttpRequest> HttpSession::buildInternalRedirectRequest_(
     raw += "GET ";
     raw += uri_path;
     raw += " HTTP/1.";
-    raw += static_cast<char>('0' + request_.getMinorVersion());
+    raw += static_cast<char>('0' + context_.request.getMinorVersion());
     raw += "\r\n";
 
     // Host は可能なら維持
     Result<const std::vector<std::string>&> host =
-        request_.getHeader(http::HeaderName(http::HeaderName::HOST).toString());
+        context_.request.getHeader(http::HeaderName(http::HeaderName::HOST).toString());
     if (host.isOk() && !host.unwrap().empty())
     {
         raw += "Host: ";

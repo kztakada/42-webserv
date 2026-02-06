@@ -56,7 +56,7 @@ Result<void> SessionCgiHandler::startCgi() {
     const server::CgiContext ctx = ctxr.unwrap();
 
     int request_body_fd = -1;
-    if (session_.request_.hasBody()) {
+    if (session_.context_.request.hasBody()) {
         (void)session_.dispatcher_.handler().bodyStore().finish();
         Result<int> fd = session_.dispatcher_.handler().bodyStore().openForRead();
         if (fd.isOk())
@@ -64,16 +64,16 @@ Result<void> SessionCgiHandler::startCgi() {
     }
 
     http::CgiMetaVariables meta = http::CgiMetaVariables::fromHttpRequest(
-        session_.request_, ctx.script_name, ctx.path_info);
+        session_.context_.request, ctx.script_name, ctx.path_info);
 
-    meta.setServerName(session_.socket_fd_.getServerIp().toString());
+    meta.setServerName(session_.context_.socket_fd.getServerIp().toString());
     {
-        std::istringstream iss(session_.socket_fd_.getServerPort().toString());
+        std::istringstream iss(session_.context_.socket_fd.getServerPort().toString());
         unsigned int p = 0;
         iss >> p;
         meta.setServerPort(p);
     }
-    meta.setRemoteAddr(session_.socket_fd_.getClientIp().toString());
+    meta.setRemoteAddr(session_.context_.socket_fd.getClientIp().toString());
     meta.setServerSoftware("webserv");
 
     std::map<std::string, std::string> env = meta.getAll();
@@ -124,9 +124,9 @@ Result<void> SessionCgiHandler::onCgiError(CgiSession& cgi, const std::string& m
 }
 
 Result<void> SessionCgiHandler::handleCgiError_(CgiSession& cgi, const std::string& message) {
-    if (session_.pending_state_ != NULL) return Result<void>();
-    if (dynamic_cast<CloseWaitState*>(session_.current_state_)) return Result<void>();
-    if (!dynamic_cast<ExecuteCgiState*>(session_.current_state_)) return Result<void>();
+    if (session_.context_.pending_state != NULL) return Result<void>();
+    if (dynamic_cast<CloseWaitState*>(session_.context_.current_state)) return Result<void>();
+    if (!dynamic_cast<ExecuteCgiState*>(session_.context_.current_state)) return Result<void>();
 
     utils::Log::error("CGI error: ", message);
 
@@ -140,8 +140,8 @@ Result<void> SessionCgiHandler::handleCgiError_(CgiSession& cgi, const std::stri
         session_.controller_.requestDelete(&cgi);
     }
 
-    session_.response_.reset();
-    session_.response_.setHttpVersion(session_.request_.getHttpVersion());
+    session_.context_.response.reset();
+    session_.context_.response.setHttpVersion(session_.context_.request.getHttpVersion());
 
     RequestProcessor::Output out;
     http::HttpStatus st = http::HttpStatus::BAD_GATEWAY;
@@ -153,13 +153,13 @@ Result<void> SessionCgiHandler::handleCgiError_(CgiSession& cgi, const std::stri
         out.body_source = NULL;
         out.should_close_connection = false;
     }
-    session_.response_.setHttpVersion(session_.request_.getHttpVersion());
+    session_.context_.response.setHttpVersion(session_.context_.request.getHttpVersion());
 
     session_.installBodySourceAndWriter_(out.body_source);
 
-    session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
+    session_.context_.should_close_connection = session_.context_.should_close_connection || session_.context_.peer_closed ||
                                out.should_close_connection ||
-                               !session_.request_.shouldKeepAlive() ||
+                               !session_.context_.request.shouldKeepAlive() ||
                                session_.dispatcher_.handler().shouldCloseConnection();
     session_.changeState(new SendResponseState());
     (void)session_.updateSocketWatches_();
@@ -167,10 +167,10 @@ Result<void> SessionCgiHandler::handleCgiError_(CgiSession& cgi, const std::stri
 }
 
 Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(CgiSession& cgi, const http::CgiResponse& cr) {
-    session_.response_.reset();
-    session_.response_.setHttpVersion(session_.request_.getHttpVersion());
+    session_.context_.response.reset();
+    session_.context_.response.setHttpVersion(session_.context_.request.getHttpVersion());
 
-    Result<void> ar = cr.applyToHttpResponse(session_.response_);
+    Result<void> ar = cr.applyToHttpResponse(session_.context_.response);
     if (ar.isError()) {
         const std::vector<utils::Byte> prefetched = cgi.takePrefetchedBody();
         (void)prefetched;
@@ -188,13 +188,13 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(CgiSession& cgi, co
             out.body_source = NULL;
             out.should_close_connection = false;
         }
-        session_.response_.setHttpVersion(session_.request_.getHttpVersion());
+        session_.context_.response.setHttpVersion(session_.context_.request.getHttpVersion());
 
         session_.installBodySourceAndWriter_(out.body_source);
 
-        session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
+        session_.context_.should_close_connection = session_.context_.should_close_connection || session_.context_.peer_closed ||
                                    out.should_close_connection ||
-                                   !session_.request_.shouldKeepAlive() ||
+                                   !session_.context_.request.shouldKeepAlive() ||
                                    session_.dispatcher_.handler().shouldCloseConnection();
         session_.changeState(new SendResponseState());
         (void)session_.updateSocketWatches_();
@@ -215,7 +215,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(CgiSession& cgi, co
 }
 
 Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(CgiSession& cgi, const http::CgiResponse& cr) {
-    if (session_.redirect_count_ >= HttpSession::kMaxInternalRedirects) {
+    if (session_.context_.redirect_count >= HttpSession::kMaxInternalRedirects) {
         const int out_fd = cgi.releaseStdoutFd();
         if (out_fd >= 0) ::close(out_fd);
 
@@ -227,13 +227,13 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(CgiSession& 
         RequestProcessor::Output out;
         Result<void> bo = session_.buildErrorOutput_(http::HttpStatus::SERVER_ERROR, &out);
         if (bo.isError()) return bo;
-        session_.response_.setHttpVersion(session_.request_.getHttpVersion());
+        session_.context_.response.setHttpVersion(session_.context_.request.getHttpVersion());
 
         session_.installBodySourceAndWriter_(out.body_source);
 
-        session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
+        session_.context_.should_close_connection = session_.context_.should_close_connection || session_.context_.peer_closed ||
                                    out.should_close_connection ||
-                                   !session_.request_.shouldKeepAlive() ||
+                                   !session_.context_.request.shouldKeepAlive() ||
                                    session_.dispatcher_.handler().shouldCloseConnection();
         session_.changeState(new SendResponseState());
         (void)session_.updateSocketWatches_();
@@ -251,14 +251,14 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(CgiSession& 
         active_cgi_session_ = NULL;
     }
 
-    session_.redirect_count_++;
+    session_.context_.redirect_count++;
 
     Result<http::HttpRequest> rr = session_.buildInternalRedirectRequest_(loc.unwrap());
     if (rr.isError()) return Result<void>(ERROR, rr.getErrorMessage());
 
-    session_.response_.reset();
+    session_.context_.response.reset();
     session_.dispatcher_.handler().reset();
-    session_.request_ = rr.unwrap();
+    session_.context_.request = rr.unwrap();
 
     return session_.prepareResponseOrCgi_();
 }

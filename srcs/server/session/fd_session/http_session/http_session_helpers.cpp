@@ -38,25 +38,25 @@ Result<void> HttpSession::setSimpleErrorResponse_(
     return Result<void>();
 }
 
-// RequestProcessor::Output を使って body_source_ / response_writer_
+// RequestProcessor::Output を使って context_.body_source / context_.response_writer
 // を差し替える。 既存の writer/body_source は必要に応じて破棄する。
 void HttpSession::installBodySourceAndWriter_(BodySource* body_source)
 {
-    if (response_writer_ != NULL)
+    if (context_.response_writer != NULL)
     {
-        delete response_writer_;
-        response_writer_ = NULL;
+        delete context_.response_writer;
+        context_.response_writer = NULL;
     }
-    if (body_source_ != NULL)
+    if (context_.body_source != NULL)
     {
-        delete body_source_;
-        body_source_ = NULL;
+        delete context_.body_source;
+        context_.body_source = NULL;
     }
 
-    body_source_ = body_source;
+    context_.body_source = body_source;
 
-    http::HttpResponseEncoder::Options opt = makeEncoderOptions_(request_);
-    response_writer_ = new HttpResponseWriter(response_, opt, body_source_);
+    http::HttpResponseEncoder::Options opt = makeEncoderOptions_(context_.request);
+    context_.response_writer = new HttpResponseWriter(context_.response, opt, context_.body_source);
 }
 
 // processError を試み、失敗したら setSimpleErrorResponse_
@@ -66,14 +66,14 @@ Result<void> HttpSession::buildErrorOutput_(
     http::HttpStatus status, RequestProcessor::Output* out)
 {
     Result<RequestProcessor::Output> per =
-        processor_.processError(request_, status, response_);
+        processor_.processError(context_.request, status, context_.response);
     if (per.isOk())
     {
         *out = per.unwrap();
         return Result<void>();
     }
 
-    Result<void> er = setSimpleErrorResponse_(response_, status);
+    Result<void> er = setSimpleErrorResponse_(context_.response, status);
     if (er.isError())
         return er;
 
@@ -86,7 +86,7 @@ Result<void> HttpSession::buildProcessorOutputOrServerError_(
     RequestProcessor::Output* out)
 {
     Result<RequestProcessor::Output> pr =
-        processor_.process(request_, response_);
+        processor_.process(context_.request, context_.response);
     if (pr.isOk())
     {
         *out = pr.unwrap();
@@ -99,7 +99,7 @@ Result<void> HttpSession::buildProcessorOutputOrServerError_(
     if (bo.isError())
         return bo;
 
-    response_.setHttpVersion(request_.getHttpVersion());
+    context_.response.setHttpVersion(context_.request.getHttpVersion());
     out->should_close_connection = true;
     return Result<void>();
 }

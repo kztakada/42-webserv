@@ -11,14 +11,14 @@ using namespace utils::result;
 Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent& event)
 {
     // クライアント切断処理
-    if (event.is_opposite_close && event.fd == context.socket_fd_.getFd())
+    if (event.is_opposite_close && event.fd == context.context_.socket_fd.getFd())
     {
-         context.peer_closed_ = true;
-         context.should_close_connection_ = true;
+         context.context_.peer_closed = true;
+         context.context_.should_close_connection = true;
          
          // レスポンス送信中に相手が閉じた場合、送信は完遂できない。
          context.changeState(new CloseWaitState());
-         context.socket_fd_.shutdown();
+         context.context_.socket_fd.shutdown();
 
          if (context.cgi_handler_.getActiveCgiSession() != NULL)
          {
@@ -31,17 +31,17 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
 
     if (event.type != kWriteEvent) return Result<void>();
 
-    if (context.response_writer_ == NULL)
+    if (context.context_.response_writer == NULL)
     {
         context.changeState(new CloseWaitState());
         return Result<void>(ERROR, "missing response writer");
     }
 
     // 送信バッファが空なら積む
-    if (context.send_buffer_.size() == 0)
+    if (context.context_.send_buffer.size() == 0)
     {
         Result<HttpResponseWriter::PumpResult> pumped =
-            context.response_writer_->pump(context.send_buffer_);
+            context.context_.response_writer->pump(context.context_.send_buffer);
         if (pumped.isError())
         {
             context.changeState(new CloseWaitState());
@@ -50,13 +50,13 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
 
         const HttpResponseWriter::PumpResult pr = pumped.unwrap();
         if (pr.should_close_connection)
-            context.should_close_connection_ = true;
+            context.context_.should_close_connection = true;
     }
 
     // flush
-    if (context.send_buffer_.size() > 0)
+    if (context.context_.send_buffer.size() > 0)
     {
-        const ssize_t n = context.send_buffer_.flushToFd(context.socket_fd_.getFd());
+        const ssize_t n = context.context_.send_buffer.flushToFd(context.context_.socket_fd.getFd());
         if (n < 0)
         {
             // 実装規定: read/write 後の errno 分岐は禁止。
@@ -65,29 +65,29 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
     }
 
     // 送信バッファが空で、レスポンス完了なら次へ
-    if (context.send_buffer_.size() == 0 && context.response_.isComplete())
+    if (context.context_.send_buffer.size() == 0 && context.context_.response.isComplete())
     {
         // 1レスポンス完了
-        if (context.response_writer_ != NULL)
+        if (context.context_.response_writer != NULL)
         {
-            delete context.response_writer_;
-            context.response_writer_ = NULL;
+            delete context.context_.response_writer;
+            context.context_.response_writer = NULL;
         }
-        // body_source_ は writer に渡しただけなので、ここで破棄
-        if (context.body_source_ != NULL)
+        // context_.body_source は writer に渡しただけなので、ここで破棄
+        if (context.context_.body_source != NULL)
         {
-            delete context.body_source_;
-            context.body_source_ = NULL;
+            delete context.context_.body_source;
+            context.context_.body_source = NULL;
         }
 
-        context.response_.reset();
+        context.context_.response.reset();
         context.dispatcher_.handler().reset();
-        context.request_ = http::HttpRequest();
+        context.context_.request = http::HttpRequest();
 
-        if (context.should_close_connection_)
+        if (context.context_.should_close_connection)
         {
             context.changeState(new CloseWaitState());
-            context.socket_fd_.shutdown();
+            context.context_.socket_fd.shutdown();
 
             if (context.cgi_handler_.getActiveCgiSession() != NULL)
             {

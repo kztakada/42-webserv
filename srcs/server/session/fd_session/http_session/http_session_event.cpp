@@ -12,7 +12,7 @@ Result<void> HttpSession::handleEvent(const FdEvent& event)
 {
     updateLastActiveTime();
 
-    if (is_complete_)
+    if (context_.is_complete)
         return Result<void>();
 
     // タイムアウトやエラーは全状態で共通してセッション終了
@@ -21,27 +21,27 @@ Result<void> HttpSession::handleEvent(const FdEvent& event)
         // 強制的にクローズ待機状態へ
         changeState(new CloseWaitState());
         // 即時反映
-        if (current_state_)
-            delete current_state_;
-        current_state_ = pending_state_;
-        pending_state_ = NULL;
-        return current_state_->handleEvent(*this, event);
+        if (context_.current_state)
+            delete context_.current_state;
+        context_.current_state = context_.pending_state;
+        context_.pending_state = NULL;
+        return context_.current_state->handleEvent(*this, event);
     }
 
     // それ以外のイベントは現在の状態に委譲
     Result<void> result = Result<void>();
-    if (current_state_)
+    if (context_.current_state)
     {
-        result = current_state_->handleEvent(*this, event);
+        result = context_.current_state->handleEvent(*this, event);
     }
 
     // 状態遷移があれば反映
-    if (pending_state_ != NULL)
+    if (context_.pending_state != NULL)
     {
-        if (current_state_)
-            delete current_state_;
-        current_state_ = pending_state_;
-        pending_state_ = NULL;
+        if (context_.current_state)
+            delete context_.current_state;
+        context_.current_state = context_.pending_state;
+        context_.pending_state = NULL;
     }
 
     return result;

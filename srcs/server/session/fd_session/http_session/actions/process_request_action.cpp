@@ -12,9 +12,9 @@ Result<void> ProcessRequestAction::execute(HttpSession& session) {
 
     session.installBodySourceAndWriter_(out.body_source);
 
-    session.should_close_connection_ = session.should_close_connection_ || session.peer_closed_ ||
+    session.context_.should_close_connection = session.context_.should_close_connection || session.context_.peer_closed ||
                                out.should_close_connection ||
-                               !session.request_.shouldKeepAlive() ||
+                               !session.context_.request.shouldKeepAlive() ||
                                session.dispatcher_.handler().shouldCloseConnection();
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();

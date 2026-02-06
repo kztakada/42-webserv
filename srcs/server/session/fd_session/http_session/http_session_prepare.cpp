@@ -9,7 +9,7 @@ using namespace utils::result;
 
 Result<void> HttpSession::prepareResponseOrCgi_()
 {
-    response_.reset();
+    context_.response.reset();
 
     Result<IRequestAction*> action_r = dispatcher_.dispatch();
     if (action_r.isError())
@@ -26,17 +26,17 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 
 Result<void> HttpSession::consumeRecvBufferWithoutRead_()
 {
-    if (pending_state_ != NULL)
+    if (context_.pending_state != NULL)
         return Result<void>();
 
     for (;;)
     {
-        const size_t before = recv_buffer_.size();
+        const size_t before = context_.recv_buffer.size();
 
-        Result<void> c = dispatcher_.consumeFromRecvBuffer(recv_buffer_);
+        Result<void> c = dispatcher_.consumeFromRecvBuffer(context_.recv_buffer);
         if (c.isError())
         {
-            http::HttpStatus st = request_.getParseErrorStatus();
+            http::HttpStatus st = context_.request.getParseErrorStatus();
             if (st == http::HttpStatus::OK)
                 st = http::HttpStatus::BAD_REQUEST;
 
@@ -44,10 +44,10 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
             return action.execute(*this);
         }
 
-        if (request_.isParseComplete())
+        if (context_.request.isParseComplete())
             return prepareResponseOrCgi_();
 
-        const size_t after = recv_buffer_.size();
+        const size_t after = context_.recv_buffer.size();
 
         if (after >= before)
             break;

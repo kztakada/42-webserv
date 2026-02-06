@@ -5,6 +5,8 @@ namespace server
 
 using namespace utils::result;
 
+// request_ が parse 完了した後の処理（routing/processor/CGI開始/response
+// writer 構築）。
 Result<void> HttpSession::prepareResponseOrCgi_()
 {
     // RequestProcessorでレスポンスを確定（CGIはここでは扱わない）
@@ -75,6 +77,9 @@ Result<void> HttpSession::prepareResponseOrCgi_()
     return Result<void>();
 }
 
+// recv_buffer_ の残りだけで進められる分を処理する（read()しない）。
+// keep-alive + pipelining 等で「次リクエストが既に user-space
+// にある」場合の 停滞を防ぐ。
 Result<void> HttpSession::consumeRecvBufferWithoutRead_()
 {
     if (state_ != RECV_REQUEST)

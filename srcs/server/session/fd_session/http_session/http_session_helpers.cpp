@@ -38,6 +38,8 @@ Result<void> HttpSession::setSimpleErrorResponse_(
     return Result<void>();
 }
 
+// RequestProcessor::Output を使って body_source_ / response_writer_
+// を差し替える。 既存の writer/body_source は必要に応じて破棄する。
 void HttpSession::installBodySourceAndWriter_(BodySource* body_source)
 {
     if (response_writer_ != NULL)
@@ -218,6 +220,9 @@ static void cleanupDestinationFile_(const std::string& path)
 
 }  // namespace
 
+// processError を試み、失敗したら setSimpleErrorResponse_
+// で最低限のヘッダだけ作る。 fallback の場合 out->body_source は NULL
+// になる。
 Result<void> HttpSession::buildErrorOutput_(
     http::HttpStatus status, RequestProcessor::Output* out)
 {
@@ -238,6 +243,8 @@ Result<void> HttpSession::buildErrorOutput_(
     return Result<void>();
 }
 
+// upload_store + multipart/form-data の場合、一時ファイルに保存された
+// multipart envelope から file part だけを抽出し、destination に保存する。
 Result<void> HttpSession::finalizeUploadStoreIfNeeded_()
 {
     if (request_.getMethod() != http::HttpMethod::POST)
@@ -383,6 +390,9 @@ Result<void> HttpSession::finalizeUploadStoreIfNeeded_()
     return Result<void>();
 }
 
+// handler_.onRequestReady() を実行し、失敗時は 400
+// の最小レスポンスを用意する。 どちらの場合でも response_ の HTTP version
+// は request_ に合わせて設定する。
 Result<void> HttpSession::prepareRequestReadyOrBadRequest_()
 {
     Result<void> ready = handler_.onRequestReady();
@@ -397,6 +407,9 @@ Result<void> HttpSession::prepareRequestReadyOrBadRequest_()
     return Result<void>();
 }
 
+// RequestProcessor::process を実行し、失敗したら 500 を用意する。
+// この場合は接続を close する方針なので out->should_close_connection を
+// true にする。
 Result<void> HttpSession::buildProcessorOutputOrServerError_(
     RequestProcessor::Output* out)
 {

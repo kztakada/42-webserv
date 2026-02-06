@@ -18,13 +18,9 @@ Result<void> HttpSession::updateSocketWatches_()
     if (state_ != CLOSE_WAIT)
     {
         if (state_ == RECV_REQUEST)
-        {
             want_read = (recv_buffer_.size() < kMaxRecvBufferBytes);
-        }
         else if (state_ == SEND_RESPONSE)
-        {
             want_write = true;
-        }
         else if (state_ == EXECUTE_CGI)
         {
             // CGI 実行中も client close 検出のため read を見る。

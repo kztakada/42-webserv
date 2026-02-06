@@ -7,6 +7,7 @@ namespace server
 
 using namespace utils::result;
 
+// CgiSession からの通知: CGI stdout のヘッダが確定した
 Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
 {
     const http::CgiResponse& cr = cgi.response();
@@ -18,6 +19,7 @@ Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
     return handleCgiHeadersReadyNormal_(cgi, cr);
 }
 
+// CgiSession からの通知: CGI がヘッダ確定前に失敗した
 Result<void> HttpSession::onCgiError(
     CgiSession& cgi, const std::string& message)
 {

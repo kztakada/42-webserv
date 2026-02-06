@@ -14,7 +14,7 @@ Result<void> ProcessRequestAction::execute(HttpSession& session)
     if (po.isError())
         return po;
 
-    session.installBodySourceAndWriter_(out.body_source.release());
+    session.installBodySourceAndWriter_(out.body_source);
 
     session.context_.should_close_connection =
         session.context_.should_close_connection ||

@@ -81,11 +81,7 @@ Result<void> SendResponseState::handleEvent(
             context.context_.response_writer = NULL;
         }
         // context_.body_source は writer に渡しただけなので、ここで破棄
-        if (context.context_.body_source != NULL)
-        {
-            delete context.context_.body_source;
-            context.context_.body_source = NULL;
-        }
+        context.context_.body_source.reset(NULL);
 
         context.context_.response.reset();
         context.getContext().request_handler.reset();

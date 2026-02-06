@@ -7,11 +7,10 @@ namespace server
 using namespace utils::result;
 using namespace http;
 
-HttpRequestHandler::HttpRequestHandler(HttpRequest& request, HttpResponse& response,
+HttpRequestHandler::HttpRequestHandler(HttpRequest& request,
     const RequestRouter& router, const IPAddress& server_ip,
     const PortType& server_port, const void* body_store_key)
     : request_(request),
-      response_(response),
       router_(router),
       server_ip_(server_ip),
       server_port_(server_port),

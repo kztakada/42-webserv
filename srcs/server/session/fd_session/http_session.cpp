@@ -11,7 +11,7 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
     const SocketAddress& client_addr, FdSessionController& controller,
     HttpProcessingModule& module)
     : FdSession(controller, kDefaultTimeoutSec),
-      context_(fd, server_addr, client_addr, controller, module.router),
+      context_(fd, server_addr, client_addr, module.router),
       module_(module)
 {
     context_.current_state = new RecvRequestState();

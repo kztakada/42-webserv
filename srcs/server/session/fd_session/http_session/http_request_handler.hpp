@@ -2,7 +2,6 @@
 #define WEBSERV_HTTP_REQUEST_HANDLER_HPP_
 
 #include "http/http_request.hpp"
-#include "http/http_response.hpp"
 #include "network/ip_address.hpp"
 #include "network/port_type.hpp"
 #include "server/http_processing_module/request_router/location_routing.hpp"
@@ -27,9 +26,9 @@ class HttpRequestHandler
         CLOSE_CONNECTION
     };
 
-    HttpRequestHandler(HttpRequest& request, HttpResponse& response,
-        const RequestRouter& router, const IPAddress& server_ip,
-        const PortType& server_port, const void* body_store_key);
+    HttpRequestHandler(HttpRequest& request, const RequestRouter& router,
+        const IPAddress& server_ip, const PortType& server_port,
+        const void* body_store_key);
 
     ~HttpRequestHandler();
 
@@ -53,7 +52,6 @@ class HttpRequestHandler
 
    private:
     HttpRequest& request_;
-    HttpResponse& response_;
     const RequestRouter& router_;
     IPAddress server_ip_;
     PortType server_port_;

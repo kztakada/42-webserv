@@ -17,7 +17,7 @@ Result<void> SendErrorAction::execute(HttpSession& session)
         return bo;
     session.context_.response.setHttpVersion(
         session.context_.request.getHttpVersion());
-    session.installBodySourceAndWriter_(out.body_source.release());
+    session.installBodySourceAndWriter_(out.body_source);
 
     session.context_.should_close_connection =
         session.context_.should_close_connection ||

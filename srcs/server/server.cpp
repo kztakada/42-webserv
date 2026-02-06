@@ -43,7 +43,8 @@ Server::Server(const ServerConfig& config)
       is_running_(false)
 {
     session_controller_ = new FdSessionController(reactor_, false);
-    http_processing_module_ = new HttpProcessingModule(config_);
+    http_processing_module_ =
+        new HttpProcessingModule(config_, *session_controller_);
 }
 
 Server::~Server()

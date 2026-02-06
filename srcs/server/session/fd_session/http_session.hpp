@@ -110,7 +110,7 @@ class HttpSession : public FdSession
     Result<void> prepareResponseOrCgi_();
 
     // http_session_helpers.cpp
-    void installBodySourceAndWriter_(BodySource* body_source);
+    void installBodySourceAndWriter_(utils::OwnedPtr<BodySource> body_source);
     Result<void> buildErrorOutput_(
         http::HttpStatus status, RequestProcessor::Output* out);
     Result<void> buildProcessorOutputOrServerError_(

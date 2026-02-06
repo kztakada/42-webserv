@@ -62,10 +62,8 @@ TEST(HttpRequestHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
     limits.max_body_bytes = 5;  // デフォルトが小さい想定
     request.setLimits(limits);
 
-    http::HttpResponse response;
-
     server::HttpRequestHandler handler(
-        request, response, router, ip.unwrap(), port.unwrap(), &request);
+        request, router, ip.unwrap(), port.unwrap(), &request);
 
     server::IoBuffer recv;
     const std::string raw =
@@ -105,10 +103,8 @@ TEST(HttpRequestHandler, RejectsBodyOverLocationMaxBodyBytes)
     limits.max_body_bytes = 100;
     request.setLimits(limits);
 
-    http::HttpResponse response;
-
     server::HttpRequestHandler handler(
-        request, response, router, ip.unwrap(), port.unwrap(), &request);
+        request, router, ip.unwrap(), port.unwrap(), &request);
 
     server::IoBuffer recv;
     const std::string raw =

@@ -40,7 +40,10 @@ static bool isPhpCgiExecutor_(const std::string& executor_path)
     return base.find("php-cgi") != std::string::npos;
 }
 
-SessionCgiHandler::SessionCgiHandler() {}
+SessionCgiHandler::SessionCgiHandler(FdSessionController& controller)
+    : controller_(controller)
+{
+}
 
 SessionCgiHandler::~SessionCgiHandler() {}
 
@@ -95,9 +98,9 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
 
     const CgiSpawnResult s = spawned.unwrap();
     ctx.active_cgi_session = new CgiSession(s.pid, s.stdin_fd, s.stdout_fd,
-        s.stderr_fd, request_body_fd, &session, ctx.controller);
+        s.stderr_fd, request_body_fd, &session, controller_);
 
-    Result<void> d = ctx.controller.delegateSession(ctx.active_cgi_session);
+    Result<void> d = controller_.delegateSession(ctx.active_cgi_session);
     if (d.isError())
     {
         delete ctx.active_cgi_session;
@@ -152,12 +155,12 @@ Result<void> SessionCgiHandler::handleCgiError_(
 
     if (ctx.active_cgi_session == &cgi)
     {
-        ctx.controller.requestDelete(ctx.active_cgi_session);
+        controller_.requestDelete(ctx.active_cgi_session);
         ctx.active_cgi_session = NULL;
     }
     else
     {
-        ctx.controller.requestDelete(&cgi);
+        controller_.requestDelete(&cgi);
     }
 
     ctx.response.reset();
@@ -177,7 +180,7 @@ Result<void> SessionCgiHandler::handleCgiError_(
     }
     ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-    session.installBodySourceAndWriter_(out.body_source.release());
+    session.installBodySourceAndWriter_(out.body_source);
 
     ctx.should_close_connection =
         ctx.should_close_connection || ctx.peer_closed ||
@@ -206,7 +209,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(
 
         if (ctx.active_cgi_session == &cgi)
         {
-            ctx.controller.requestDelete(ctx.active_cgi_session);
+            controller_.requestDelete(ctx.active_cgi_session);
             ctx.active_cgi_session = NULL;
         }
 
@@ -220,7 +223,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(
         }
         ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-        session.installBodySourceAndWriter_(out.body_source.release());
+        session.installBodySourceAndWriter_(out.body_source);
 
         ctx.should_close_connection =
             ctx.should_close_connection || ctx.peer_closed ||
@@ -237,7 +240,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(
         return Result<void>(ERROR, "missing cgi stdout fd");
 
     BodySource* bs = new PrefetchedFdBodySource(stdout_fd, prefetched);
-    session.installBodySourceAndWriter_(bs);
+    session.installBodySourceAndWriter_(utils::OwnedPtr<BodySource>(bs));
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();
 
@@ -258,7 +261,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(
 
         if (ctx.active_cgi_session == &cgi)
         {
-            ctx.controller.requestDelete(ctx.active_cgi_session);
+            controller_.requestDelete(ctx.active_cgi_session);
             ctx.active_cgi_session = NULL;
         }
 
@@ -269,7 +272,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(
             return bo;
         ctx.response.setHttpVersion(ctx.request.getHttpVersion());
 
-        session.installBodySourceAndWriter_(out.body_source.release());
+        session.installBodySourceAndWriter_(out.body_source);
 
         ctx.should_close_connection =
             ctx.should_close_connection || ctx.peer_closed ||
@@ -290,7 +293,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(
 
     if (ctx.active_cgi_session == &cgi)
     {
-        ctx.controller.requestDelete(ctx.active_cgi_session);
+        controller_.requestDelete(ctx.active_cgi_session);
         ctx.active_cgi_session = NULL;
     }
 

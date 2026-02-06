@@ -7,6 +7,7 @@
 #include "server/http_processing_module/request_processor.hpp"
 #include "server/http_processing_module/request_router/request_router.hpp"
 #include "server/http_processing_module/session_cgi_handler.hpp"
+#include "server/session/fd_session_controller.hpp"
 #include "utils/result.hpp"
 
 namespace server
@@ -21,8 +22,12 @@ struct HttpProcessingModule
     RequestDispatcher dispatcher;
     RequestProcessor processor;
 
-    explicit HttpProcessingModule(const ServerConfig& config)
-        : router(config), cgi_handler(), dispatcher(), processor(router)
+    explicit HttpProcessingModule(
+        const ServerConfig& config, FdSessionController& controller)
+        : router(config),
+          cgi_handler(controller),
+          dispatcher(router),
+          processor(router)
     {
     }
 

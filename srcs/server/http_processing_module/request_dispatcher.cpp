@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstdio>
 
+#include "server/http_processing_module/request_router/request_router.hpp"
 #include "server/session/fd_session/http_session/actions/execute_cgi_action.hpp"
 #include "server/session/fd_session/http_session/actions/process_request_action.hpp"
 #include "server/session/fd_session/http_session/actions/send_error_action.hpp"
@@ -177,7 +178,10 @@ static void cleanupDestinationFile_(const std::string& path)
 
 }  // namespace
 
-RequestDispatcher::RequestDispatcher() {}
+RequestDispatcher::RequestDispatcher(const RequestRouter& router)
+    : router_(router)
+{
+}
 
 Result<void> RequestDispatcher::consumeFromRecvBuffer(SessionContext& ctx)
 {
@@ -218,7 +222,7 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
     if (ctx.request.getContentType() != http::ContentType::MULTIPART_FORM_DATA)
         return Result<void>();
 
-    Result<LocationRouting> route = ctx.router.route(ctx.request,
+    Result<LocationRouting> route = router_.route(ctx.request,
         ctx.socket_fd.getServerIp(), ctx.socket_fd.getServerPort());
     if (route.isError())
         return Result<void>(ERROR, route.getErrorMessage());

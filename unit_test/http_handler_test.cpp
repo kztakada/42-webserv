@@ -1,4 +1,4 @@
-#include "server/session/fd_session/http_session/http_handler.hpp"
+#include "server/session/fd_session/http_session/http_request_handler.hpp"
 
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -48,7 +48,7 @@ static void mustReadAll(int fd, std::string* out)
     }
 }
 
-TEST(HttpHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
+TEST(HttpRequestHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
 {
     server::ServerConfig config = makeServerConfig(0);
     server::RequestRouter router(config);
@@ -65,7 +65,7 @@ TEST(HttpHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
 
     http::HttpResponse response;
 
-    server::HttpHandler handler(
+    server::HttpRequestHandler handler(
         request, response, router, ip.unwrap(), port.unwrap(), &request);
 
     server::IoBuffer recv;
@@ -91,7 +91,7 @@ TEST(HttpHandler, AppliesUnlimitedMaxBodyBytesFromLocation)
     EXPECT_EQ(stored, std::string("0123456789"));
 }
 
-TEST(HttpHandler, RejectsBodyOverLocationMaxBodyBytes)
+TEST(HttpRequestHandler, RejectsBodyOverLocationMaxBodyBytes)
 {
     server::ServerConfig config = makeServerConfig(3);
     server::RequestRouter router(config);
@@ -108,7 +108,7 @@ TEST(HttpHandler, RejectsBodyOverLocationMaxBodyBytes)
 
     http::HttpResponse response;
 
-    server::HttpHandler handler(
+    server::HttpRequestHandler handler(
         request, response, router, ip.unwrap(), port.unwrap(), &request);
 
     server::IoBuffer recv;

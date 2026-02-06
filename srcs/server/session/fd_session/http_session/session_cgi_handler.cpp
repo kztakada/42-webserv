@@ -47,18 +47,18 @@ void SessionCgiHandler::clearActiveCgiSession() {
 }
 
 Result<void> SessionCgiHandler::startCgi() {
-    if (!session_.handler_.hasLocationRouting())
+    if (!session_.dispatcher_.handler().hasLocationRouting())
         return Result<void>(ERROR, "missing routing for CGI");
 
-    Result<server::CgiContext> ctxr = session_.handler_.getLocationRouting().getCgiContext();
+    Result<server::CgiContext> ctxr = session_.dispatcher_.handler().getLocationRouting().getCgiContext();
     if (ctxr.isError())
         return Result<void>(ERROR, ctxr.getErrorMessage());
     const server::CgiContext ctx = ctxr.unwrap();
 
     int request_body_fd = -1;
     if (session_.request_.hasBody()) {
-        (void)session_.handler_.bodyStore().finish();
-        Result<int> fd = session_.handler_.bodyStore().openForRead();
+        (void)session_.dispatcher_.handler().bodyStore().finish();
+        Result<int> fd = session_.dispatcher_.handler().bodyStore().openForRead();
         if (fd.isOk())
             request_body_fd = fd.unwrap();
     }
@@ -160,7 +160,7 @@ Result<void> SessionCgiHandler::handleCgiError_(CgiSession& cgi, const std::stri
     session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
                                out.should_close_connection ||
                                !session_.request_.shouldKeepAlive() ||
-                               session_.handler_.shouldCloseConnection();
+                               session_.dispatcher_.handler().shouldCloseConnection();
     session_.changeState(new SendResponseState());
     (void)session_.updateSocketWatches_();
     return Result<void>();
@@ -195,7 +195,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(CgiSession& cgi, co
         session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
                                    out.should_close_connection ||
                                    !session_.request_.shouldKeepAlive() ||
-                                   session_.handler_.shouldCloseConnection();
+                                   session_.dispatcher_.handler().shouldCloseConnection();
         session_.changeState(new SendResponseState());
         (void)session_.updateSocketWatches_();
         return Result<void>();
@@ -234,7 +234,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(CgiSession& 
         session_.should_close_connection_ = session_.should_close_connection_ || session_.peer_closed_ ||
                                    out.should_close_connection ||
                                    !session_.request_.shouldKeepAlive() ||
-                                   session_.handler_.shouldCloseConnection();
+                                   session_.dispatcher_.handler().shouldCloseConnection();
         session_.changeState(new SendResponseState());
         (void)session_.updateSocketWatches_();
         return Result<void>();
@@ -257,7 +257,7 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyLocalRedirect_(CgiSession& 
     if (rr.isError()) return Result<void>(ERROR, rr.getErrorMessage());
 
     session_.response_.reset();
-    session_.handler_.reset();
+    session_.dispatcher_.handler().reset();
     session_.request_ = rr.unwrap();
 
     return session_.prepareResponseOrCgi_();

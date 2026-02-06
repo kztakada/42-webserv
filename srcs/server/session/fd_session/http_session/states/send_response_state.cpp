@@ -81,7 +81,7 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
         }
 
         context.response_.reset();
-        context.handler_.reset();
+        context.dispatcher_.handler().reset();
         context.request_ = http::HttpRequest();
 
         if (context.should_close_connection_)

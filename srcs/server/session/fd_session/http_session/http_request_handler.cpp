@@ -1,4 +1,4 @@
-#include "server/session/fd_session/http_session/http_handler.hpp"
+#include "server/session/fd_session/http_session/http_request_handler.hpp"
 
 #include <limits>
 
@@ -7,7 +7,7 @@ namespace server
 using namespace utils::result;
 using namespace http;
 
-HttpHandler::HttpHandler(HttpRequest& request, HttpResponse& response,
+HttpRequestHandler::HttpRequestHandler(HttpRequest& request, HttpResponse& response,
     const RequestRouter& router, const IPAddress& server_ip,
     const PortType& server_port, const void* body_store_key)
     : request_(request),
@@ -25,9 +25,9 @@ HttpHandler::HttpHandler(HttpRequest& request, HttpResponse& response,
 {
 }
 
-HttpHandler::~HttpHandler() {}
+HttpRequestHandler::~HttpRequestHandler() {}
 
-void HttpHandler::reset()
+void HttpRequestHandler::reset()
 {
     has_routing_ = false;
     location_routing_ = LocationRouting();
@@ -37,7 +37,7 @@ void HttpHandler::reset()
     body_store_.reset();
 }
 
-Result<void> HttpHandler::consumeFromRecvBuffer(IoBuffer& recv_buffer)
+Result<void> HttpRequestHandler::consumeFromRecvBuffer(IoBuffer& recv_buffer)
 {
     while (recv_buffer.size() > 0)
     {
@@ -88,7 +88,7 @@ Result<void> HttpHandler::consumeFromRecvBuffer(IoBuffer& recv_buffer)
     return Result<void>();
 }
 
-Result<void> HttpHandler::onRequestReady()
+Result<void> HttpRequestHandler::onRequestReady()
 {
     if (!has_routing_)
     {
@@ -104,13 +104,13 @@ Result<void> HttpHandler::onRequestReady()
     return Result<void>();
 }
 
-HttpHandler::ConditionalBodySink::ConditionalBodySink(
+HttpRequestHandler::ConditionalBodySink::ConditionalBodySink(
     const HttpRequest& request, BodyStore& store)
     : request_(request), store_(store)
 {
 }
 
-Result<void> HttpHandler::ConditionalBodySink::write(
+Result<void> HttpRequestHandler::ConditionalBodySink::write(
     const utils::Byte* data, size_t len)
 {
     if (request_.getMethod() == HttpMethod::GET)
@@ -118,7 +118,7 @@ Result<void> HttpHandler::ConditionalBodySink::write(
     return store_.append(data, len);
 }
 
-Result<void> HttpHandler::decideRouting_()
+Result<void> HttpRequestHandler::decideRouting_()
 {
     Result<LocationRouting> route_result =
         router_.route(request_, server_ip_, server_port_);
@@ -130,7 +130,7 @@ Result<void> HttpHandler::decideRouting_()
     return Result<void>();
 }
 
-Result<void> HttpHandler::ensureRoutingAndApplyBodyLimit_()
+Result<void> HttpRequestHandler::ensureRoutingAndApplyBodyLimit_()
 {
     if (!has_routing_)
     {

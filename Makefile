@@ -86,7 +86,11 @@ TEST_PROD_SRCS ?= \
 	srcs/server/session/fd_session/cgi_session.cpp \
 		srcs/server/session/fd_session/http_session/http_response_writer.cpp \
 	srcs/server/session/fd_session/http_session/body_store.cpp \
-	srcs/server/session/fd_session/http_session/http_handler.cpp \
+	srcs/server/session/fd_session/http_session/http_request_handler.cpp \
+	srcs/server/session/fd_session/http_session/request_dispatcher.cpp \
+	srcs/server/session/fd_session/http_session/actions/execute_cgi_action.cpp \
+	srcs/server/session/fd_session/http_session/actions/process_request_action.cpp \
+	srcs/server/session/fd_session/http_session/actions/send_error_action.cpp \
 	srcs/server/request_processor/request_processor.cpp \
 	srcs/server/request_router/location_directive.cpp \
 	srcs/server/request_router/location_routing.cpp \

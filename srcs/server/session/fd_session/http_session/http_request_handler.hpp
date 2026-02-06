@@ -1,5 +1,5 @@
-#ifndef WEBSERV_HTTP_HANDLER_HPP_
-#define WEBSERV_HTTP_HANDLER_HPP_
+#ifndef WEBSERV_HTTP_REQUEST_HANDLER_HPP_
+#define WEBSERV_HTTP_REQUEST_HANDLER_HPP_
 
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
@@ -16,7 +16,7 @@ namespace server
 using namespace utils::result;
 using namespace http;
 
-class HttpHandler
+class HttpRequestHandler
 {
    public:
     enum NextStep
@@ -27,11 +27,11 @@ class HttpHandler
         CLOSE_CONNECTION
     };
 
-    HttpHandler(HttpRequest& request, HttpResponse& response,
+    HttpRequestHandler(HttpRequest& request, HttpResponse& response,
         const RequestRouter& router, const IPAddress& server_ip,
         const PortType& server_port, const void* body_store_key);
 
-    ~HttpHandler();
+    ~HttpRequestHandler();
 
     void reset();
 
@@ -85,9 +85,9 @@ class HttpHandler
     NextStep next_step_;
     bool should_close_connection_;
 
-    HttpHandler();
-    HttpHandler(const HttpHandler& rhs);
-    HttpHandler& operator=(const HttpHandler& rhs);
+    HttpRequestHandler();
+    HttpRequestHandler(const HttpRequestHandler& rhs);
+    HttpRequestHandler& operator=(const HttpRequestHandler& rhs);
 
     Result<void> decideRouting_();
     Result<void> ensureRoutingAndApplyBodyLimit_();

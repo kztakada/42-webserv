@@ -13,8 +13,8 @@
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
 #include "server/session/fd_session.hpp"
 #include "server/session/fd_session/http_session/body_source.hpp"
-#include "server/session/fd_session/http_session/http_handler.hpp"
 #include "server/session/fd_session/http_session/http_response_writer.hpp"
+#include "server/session/fd_session/http_session/request_dispatcher.hpp"
 #include "server/session/fd_session/http_session/states/i_http_session_state.hpp"
 #include "server/session/fd_session/http_session/session_cgi_handler.hpp"
 #include "server/session/io_buffer.hpp"
@@ -35,6 +35,9 @@ class RecvRequestState;
 class ExecuteCgiState;
 class SendResponseState;
 class CloseWaitState;
+class ProcessRequestAction;
+class SendErrorAction;
+class ExecuteCgiAction;
 
 // HTTPセッション：HTTPリクエスト/レスポンスの処理状態を管理
 class HttpSession : public FdSession
@@ -75,8 +78,9 @@ class HttpSession : public FdSession
     friend class SendResponseState;
     friend class CloseWaitState;
     friend class SessionCgiHandler;
-
-    SessionCgiHandler cgi_handler_; // CGIハンドラ
+    friend class ProcessRequestAction;
+    friend class SendErrorAction;
+    friend class ExecuteCgiAction;
 
    private:
     // --- プロトコル解析・構築 ---
@@ -88,10 +92,11 @@ class HttpSession : public FdSession
 
     // --- 制御と外部連携 ---
     const RequestRouter& router_;  // ListenerSession経由で渡される参照
-    HttpHandler handler_;          // リクエスト解析・処理ハンドラ
     RequestProcessor processor_;   // リクエスト処理ユーティリティ
 
-    // CgiSession* active_cgi_session_; // SessionCgiHandlerへ移動
+    // --- サブモジュール ---
+    SessionCgiHandler cgi_handler_; // CGIハンドラ
+    RequestDispatcher dispatcher_;  // リクエストディスパッチャ
 
     // --- データ転送関連 ---
     BodySource* body_source_;              // レスポンスボディ供給元（所有権あり）
@@ -131,10 +136,8 @@ class HttpSession : public FdSession
     void installBodySourceAndWriter_(BodySource* body_source);
     Result<void> buildErrorOutput_(
         http::HttpStatus status, RequestProcessor::Output* out);
-    Result<void> prepareRequestReadyOrBadRequest_();
     Result<void> buildProcessorOutputOrServerError_(
         RequestProcessor::Output* out);
-    Result<void> finalizeUploadStoreIfNeeded_();
     static http::HttpResponseEncoder::Options makeEncoderOptions_(
         const http::HttpRequest& request);
     static Result<void> setSimpleErrorResponse_(

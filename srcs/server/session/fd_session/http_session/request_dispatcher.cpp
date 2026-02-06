@@ -8,6 +8,7 @@
 #include "server/session/fd_session/http_session/actions/execute_cgi_action.hpp"
 #include "server/session/fd_session/http_session/actions/process_request_action.hpp"
 #include "server/session/fd_session/http_session/actions/send_error_action.hpp"
+#include "server/session/fd_session/http_session/session_context.hpp"
 #include "utils/log.hpp"
 
 namespace server
@@ -175,42 +176,32 @@ static void cleanupDestinationFile_(const std::string& path)
 
 }  // namespace
 
-RequestDispatcher::RequestDispatcher(HttpRequest& request,
-    HttpResponse& response, const RequestRouter& router,
-    const IPAddress& server_ip, const PortType& server_port,
-    const void* body_store_key)
-    : handler_(request, response, router, server_ip, server_port,
-          body_store_key),
-      request_(request),
-      response_(response),
-      router_(router),
-      server_ip_(server_ip),
-      server_port_(server_port)
+RequestDispatcher::RequestDispatcher()
 {
 }
 
-Result<void> RequestDispatcher::consumeFromRecvBuffer(IoBuffer& recv_buffer)
+Result<void> RequestDispatcher::consumeFromRecvBuffer(SessionContext& ctx)
 {
-    return handler_.consumeFromRecvBuffer(recv_buffer);
+    return ctx.request_handler.consumeFromRecvBuffer(ctx.recv_buffer);
 }
 
-Result<IRequestAction*> RequestDispatcher::dispatch()
+Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
 {
-    Result<void> ready = handler_.onRequestReady();
+    Result<void> ready = ctx.request_handler.onRequestReady();
     if (ready.isError())
     {
         utils::Log::error("Dispatcher: onRequestReady failed: ", ready.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
-    Result<void> fu = finalizeUploadStoreIfNeeded_();
+    Result<void> fu = finalizeUploadStoreIfNeeded_(ctx);
     if (fu.isError())
     {
         utils::Log::error("Dispatcher: finalizeUploadStore failed: ", fu.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
-    if (handler_.getNextStep() == HttpRequestHandler::EXECUTE_CGI)
+    if (ctx.request_handler.getNextStep() == HttpRequestHandler::EXECUTE_CGI)
     {
         return new ExecuteCgiAction();
     }
@@ -218,15 +209,15 @@ Result<IRequestAction*> RequestDispatcher::dispatch()
     return new ProcessRequestAction();
 }
 
-Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_()
+Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(SessionContext& ctx)
 {
-    if (request_.getMethod() != http::HttpMethod::POST)
+    if (ctx.request.getMethod() != http::HttpMethod::POST)
         return Result<void>();
-    if (request_.getContentType() != http::ContentType::MULTIPART_FORM_DATA)
+    if (ctx.request.getContentType() != http::ContentType::MULTIPART_FORM_DATA)
         return Result<void>();
 
     Result<LocationRouting> route =
-        router_.route(request_, server_ip_, server_port_);
+        ctx.router.route(ctx.request, ctx.socket_fd.getServerIp(), ctx.socket_fd.getServerPort());
     if (route.isError())
         return Result<void>(ERROR, route.getErrorMessage());
     if (route.unwrap().getNextAction() != STORE_BODY)
@@ -235,24 +226,24 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_()
     Result<UploadContext> up = route.unwrap().getUploadContext();
     if (up.isError())
         return Result<void>(ERROR, up.getErrorMessage());
-    const UploadContext ctx = up.unwrap();
+    const UploadContext uctx = up.unwrap();
 
-    const std::string boundary = request_.getContentTypeParam("boundary");
+    const std::string boundary = ctx.request.getContentTypeParam("boundary");
     if (boundary.empty())
         return Result<void>(ERROR, "missing multipart boundary");
 
-    (void)handler_.bodyStore().finish();
-    Result<int> in_fd_r = handler_.bodyStore().openForRead();
+    (void)ctx.request_handler.bodyStore().finish();
+    Result<int> in_fd_r = ctx.request_handler.bodyStore().openForRead();
     if (in_fd_r.isError())
         return Result<void>(ERROR, in_fd_r.getErrorMessage());
     int in_fd = in_fd_r.unwrap();
 
     int flags = O_WRONLY | O_CREAT;
-    if (ctx.allow_overwrite)
+    if (uctx.allow_overwrite)
         flags |= O_TRUNC;
     else
         flags |= O_EXCL;
-    const std::string dest_path = ctx.destination_path.str();
+    const std::string dest_path = uctx.destination_path.str();
     const int out_fd = ::open(dest_path.c_str(), flags, 0644);
     if (out_fd < 0)
     {

@@ -16,7 +16,8 @@ SessionContext::SessionContext(int fd, const SocketAddress& server_addr, const S
       is_complete(false), redirect_count(0),
       peer_closed(false), should_close_connection(false),
       socket_watch_read(false), socket_watch_write(false),
-      active_cgi_session(NULL)
+      active_cgi_session(NULL),
+      request_handler(request, response, router, socket_fd.getServerIp(), socket_fd.getServerPort(), this)
 {}
 
 SessionContext::~SessionContext() {

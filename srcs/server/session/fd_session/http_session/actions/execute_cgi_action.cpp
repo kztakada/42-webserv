@@ -6,7 +6,7 @@ namespace server {
 using namespace utils::result;
 
 Result<void> ExecuteCgiAction::execute(HttpSession& session) {
-    Result<void> sr = session.cgi_handler_.startCgi();
+    Result<void> sr = session.cgi_handler_.startCgi(session);
     if (sr.isError()) {
          SendErrorAction fallback(http::HttpStatus::SERVER_ERROR);
          return fallback.execute(session);

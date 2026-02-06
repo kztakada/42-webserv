@@ -12,26 +12,21 @@ namespace server {
 
 class HttpSession;
 class CgiSession;
+struct SessionContext;
 
 class SessionCgiHandler {
 public:
-    explicit SessionCgiHandler(HttpSession& session);
+    SessionCgiHandler();
     ~SessionCgiHandler();
 
-    utils::result::Result<void> startCgi();
-    utils::result::Result<void> onCgiHeadersReady(CgiSession& cgi);
-    utils::result::Result<void> onCgiError(CgiSession& cgi, const std::string& message);
-
-    CgiSession* getActiveCgiSession() const;
-    void clearActiveCgiSession();
+    utils::result::Result<void> startCgi(HttpSession& session);
+    utils::result::Result<void> onCgiHeadersReady(HttpSession& session, CgiSession& cgi);
+    utils::result::Result<void> onCgiError(HttpSession& session, CgiSession& cgi, const std::string& message);
 
 private:
-    HttpSession& session_;
-    CgiSession* active_cgi_session_;
-
-    utils::result::Result<void> handleCgiHeadersReadyLocalRedirect_(CgiSession& cgi, const http::CgiResponse& cr);
-    utils::result::Result<void> handleCgiHeadersReadyNormal_(CgiSession& cgi, const http::CgiResponse& cr);
-    utils::result::Result<void> handleCgiError_(CgiSession& cgi, const std::string& message);
+    utils::result::Result<void> handleCgiHeadersReadyLocalRedirect_(HttpSession& session, CgiSession& cgi, const http::CgiResponse& cr);
+    utils::result::Result<void> handleCgiHeadersReadyNormal_(HttpSession& session, CgiSession& cgi, const http::CgiResponse& cr);
+    utils::result::Result<void> handleCgiError_(HttpSession& session, CgiSession& cgi, const std::string& message);
 };
 
 } // namespace server

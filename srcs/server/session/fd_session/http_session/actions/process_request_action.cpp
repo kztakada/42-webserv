@@ -15,7 +15,7 @@ Result<void> ProcessRequestAction::execute(HttpSession& session) {
     session.context_.should_close_connection = session.context_.should_close_connection || session.context_.peer_closed ||
                                out.should_close_connection ||
                                !session.context_.request.shouldKeepAlive() ||
-                               session.dispatcher_.handler().shouldCloseConnection();
+                               session.getContext().request_handler.shouldCloseConnection();
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();
     return Result<void>();

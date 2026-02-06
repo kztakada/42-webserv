@@ -20,10 +20,10 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
          context.changeState(new CloseWaitState());
          context.context_.socket_fd.shutdown();
 
-         if (context.cgi_handler_.getActiveCgiSession() != NULL)
+         if (context.getContext().active_cgi_session != NULL)
          {
-             context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());
-             context.cgi_handler_.clearActiveCgiSession();
+             context.controller_.requestDelete(context.getContext().active_cgi_session);
+             context.getContext().active_cgi_session = NULL;
          }
          context.controller_.requestDelete(&context);
          return Result<void>();
@@ -81,7 +81,7 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
         }
 
         context.context_.response.reset();
-        context.dispatcher_.handler().reset();
+        context.getContext().request_handler.reset();
         context.context_.request = http::HttpRequest();
 
         if (context.context_.should_close_connection)
@@ -89,10 +89,10 @@ Result<void> SendResponseState::handleEvent(HttpSession& context, const FdEvent&
             context.changeState(new CloseWaitState());
             context.context_.socket_fd.shutdown();
 
-            if (context.cgi_handler_.getActiveCgiSession() != NULL)
+            if (context.getContext().active_cgi_session != NULL)
             {
-                context.controller_.requestDelete(context.cgi_handler_.getActiveCgiSession());
-                context.cgi_handler_.clearActiveCgiSession();
+                context.controller_.requestDelete(context.getContext().active_cgi_session);
+                context.getContext().active_cgi_session = NULL;
             }
             context.controller_.requestDelete(&context);
             return Result<void>();

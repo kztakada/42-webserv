@@ -5,6 +5,7 @@
 #include "http/http_response.hpp"
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
 #include "server/session/io_buffer.hpp"
+#include "server/session/fd_session/http_session/http_request_handler.hpp"
 
 namespace server {
 
@@ -41,6 +42,7 @@ struct SessionContext {
     bool socket_watch_write;
     
     CgiSession* active_cgi_session;
+    HttpRequestHandler request_handler;
 
     SessionContext(int fd, const SocketAddress& server_addr, const SocketAddress& client_addr,
                    FdSessionController& ctl, const RequestRouter& rt);

@@ -11,10 +11,10 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 {
     context_.response.reset();
 
-    Result<IRequestAction*> action_r = dispatcher_.dispatch();
+    Result<IRequestAction*> action_r = dispatcher_.dispatch(context_);
     if (action_r.isError())
     {
-        // ディスパッチ失敗（通常はActionを返すが、システムエラーの場合）
+        // ディスパッチ失敗
         return Result<void>(ERROR, action_r.getErrorMessage());
     }
 
@@ -33,7 +33,7 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
     {
         const size_t before = context_.recv_buffer.size();
 
-        Result<void> c = dispatcher_.consumeFromRecvBuffer(context_.recv_buffer);
+        Result<void> c = dispatcher_.consumeFromRecvBuffer(context_);
         if (c.isError())
         {
             http::HttpStatus st = context_.request.getParseErrorStatus();

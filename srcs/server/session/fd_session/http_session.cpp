@@ -12,10 +12,8 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
     const RequestRouter& router)
     : FdSession(controller, kDefaultTimeoutSec),
       context_(fd, server_addr, client_addr, controller, router),
-      cgi_handler_(*this),
-      dispatcher_(context_.request, context_.response, router,
-          context_.socket_fd.getServerIp(), context_.socket_fd.getServerPort(),
-          this),
+      cgi_handler_(),
+      dispatcher_(),
       processor_(router, context_.socket_fd.getServerIp(),
           context_.socket_fd.getServerPort())
 {
@@ -51,13 +49,13 @@ void HttpSession::changeState(IHttpSessionState* next_state)
 
 Result<void> HttpSession::onCgiHeadersReady(CgiSession& cgi)
 {
-    return cgi_handler_.onCgiHeadersReady(cgi);
+    return cgi_handler_.onCgiHeadersReady(*this, cgi);
 }
 
 Result<void> HttpSession::onCgiError(CgiSession& cgi,
     const std::string& message)
 {
-    return cgi_handler_.onCgiError(cgi, message);
+    return cgi_handler_.onCgiError(*this, cgi, message);
 }
 
 }  // namespace server

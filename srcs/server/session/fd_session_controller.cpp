@@ -12,7 +12,8 @@ FdSessionController::FdSessionController()
       deleting_sessions_(),
       deferred_delete_(),
       fd_watch_state_(),
-      session_fds_()
+      session_fds_(),
+      is_shutting_down_(false)
 {
 }
 
@@ -24,7 +25,8 @@ FdSessionController::FdSessionController(
       deleting_sessions_(),
       deferred_delete_(),
       fd_watch_state_(),
-      session_fds_()
+      session_fds_(),
+      is_shutting_down_(false)
 {
     if (reactor_ == NULL)
     {
@@ -338,6 +340,8 @@ void FdSessionController::handleTimeouts()
 
 void FdSessionController::clearAllSessions()
 {
+    is_shutting_down_ = true;
+
     // watch解除
     if (reactor_ != NULL)
     {
@@ -357,6 +361,8 @@ void FdSessionController::clearAllSessions()
         delete deferred_delete_[i];
     deferred_delete_.clear();
     deleting_sessions_.clear();
+
+    is_shutting_down_ = false;
 }
 
 }  // namespace server

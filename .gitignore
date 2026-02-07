@@ -10,3 +10,4 @@ webserv
 tester
 
 error.txt
+valgrind.log

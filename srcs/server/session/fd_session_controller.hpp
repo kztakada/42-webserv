@@ -51,6 +51,8 @@ class FdSessionController
 
     void clearAllSessions();
 
+    bool isShuttingDown() const { return is_shutting_down_; }
+
    private:
     struct FdWatchState
     {
@@ -73,6 +75,8 @@ class FdSessionController
 
     std::map<int, FdWatchState> fd_watch_state_;        // fd -> watch状態
     std::map<FdSession*, std::set<int> > session_fds_;  // session -> fds
+
+    bool is_shutting_down_;
 
     Result<void> addOrRemoveWatch_(
         int fd, FdSession* session, bool want_read, bool want_write);

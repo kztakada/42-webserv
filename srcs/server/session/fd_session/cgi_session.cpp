@@ -1,6 +1,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 
 #include <signal.h>
+#include <sys/select.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -60,11 +61,39 @@ CgiSession::~CgiSession()
     if (pid_ > 0)
     {
         int status = 0;
-        const pid_t r = ::waitpid(pid_, &status, WNOHANG);
+        pid_t r = ::waitpid(pid_, &status, WNOHANG);
         if (r == 0)
         {
-            ::kill(pid_, SIGKILL);
-            ::waitpid(pid_, &status, 0);
+            if (controller_.isShuttingDown())
+            {
+                // 親プロセス(shutdown)中は、まずSIGTERMで終了を促す
+                (void)::kill(pid_, SIGTERM);
+
+                // 短い猶予の間だけ終了を待つ（sleep系は使わず select で待機）
+                const int kGraceTotalMs = 300;
+                const int kTickMs = 30;
+                int waited_ms = 0;
+                while (waited_ms < kGraceTotalMs)
+                {
+                    r = ::waitpid(pid_, &status, WNOHANG);
+                    if (r != 0)
+                        break;
+
+                    struct timeval tv;
+                    tv.tv_sec = 0;
+                    tv.tv_usec = kTickMs * 1000;
+                    (void)::select(0, NULL, NULL, NULL, &tv);
+                    waited_ms += kTickMs;
+                }
+            }
+
+            // まだ生きていれば強制終了（従来通り）
+            r = ::waitpid(pid_, &status, WNOHANG);
+            if (r == 0)
+            {
+                (void)::kill(pid_, SIGKILL);
+                (void)::waitpid(pid_, &status, 0);
+            }
         }
         pid_ = -1;
     }

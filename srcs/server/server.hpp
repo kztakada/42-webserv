@@ -31,12 +31,11 @@ class Server
     bool isRunning() const { return should_stop_ == false; }
 
    private:
-    // for init
-    explicit Server(const ServerConfig& config);  // コンストラクタはprivate
-    Result<void> initialize();  // 初期化もprivate（Factoryから呼ばれる）
-
     // accept()されるまで待ち状態にしておける接続要求のキュー（保留）の上限
     static const int kListenBacklog = 128;
+
+    static Server* running_instance_;  // 現在実行中のインスタンス
+    bool is_running_;                  // サーバーの状態
 
     // コンポーネント
     FdEventReactor* reactor_;
@@ -47,20 +46,16 @@ class Server
     ServerConfig config_;
 
     // シグナル処理
-    static Server* running_instance_;  // 現在実行中のインスタンス
+    static void signalHandler(int signum);
     volatile sig_atomic_t should_stop_;
-    static void signalHandler(int signum)
-    {
-        (void)signum;
-        if (running_instance_)
-            running_instance_->should_stop_ = true;
-    }
+
+    // for init
+    explicit Server(const ServerConfig& config);  // コンストラクタはprivate
+    Result<void> initialize();                    // 動的初期化(Factory専用)
 
     // コピー禁止
     Server(const Server&);
     Server& operator=(const Server&);
-
-    bool is_running_;
 };
 }  // namespace server
 

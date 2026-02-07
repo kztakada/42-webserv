@@ -35,12 +35,12 @@ Result<Server*> Server::create(const ServerConfig& config)
 }
 
 Server::Server(const ServerConfig& config)
-    : reactor_(FdEventReactorFactory::create()),
+    : is_running_(false),
+      reactor_(FdEventReactorFactory::create()),
       session_controller_(NULL),
       http_processing_module_(NULL),
       config_(config),
-      should_stop_(0),
-      is_running_(false)
+      should_stop_(0)
 {
     session_controller_ = new FdSessionController(reactor_, false);
     http_processing_module_ =
@@ -124,6 +124,13 @@ void Server::stop()
 
 //------------------------------------------------------------
 // private
+
+void Server::signalHandler(int signum)
+{
+    (void)signum;
+    if (running_instance_)
+        running_instance_->should_stop_ = true;
+}
 
 Result<void> Server::initialize()
 {

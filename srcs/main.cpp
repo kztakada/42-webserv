@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     if (argc != 2)
     {
         std::cerr << "Usage: " << argv[0] << " <config_file>" << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
     try
@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
         {
             std::cerr << "Config error: " << config_result.getErrorMessage()
                       << std::endl;
-            return 1;
+            return EXIT_FAILURE;
         }
 
         const ServerConfig& config = config_result.unwrap();
@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
         {
             std::cerr << "Server creation failed: "
                       << server_result.getErrorMessage() << std::endl;
-            return 1;
+            return EXIT_FAILURE;
         }
 
         Server* server = server_result.unwrap();
@@ -48,8 +48,8 @@ int main(int argc, char* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Exception: " << e.what() << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

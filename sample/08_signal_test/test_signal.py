@@ -6,6 +6,81 @@ import signal
 import sys
 import socket
 
+
+def find_single_child_pid(parent_pid, timeout=5):
+    """Find the first child PID of parent_pid (Linux /proc).
+
+    We run webserv under valgrind, so proc.pid is valgrind's PID.
+    To test webserv's signal handling/cleanup, we must signal the child.
+    """
+    children_path = f"/proc/{parent_pid}/task/{parent_pid}/children"
+    start = time.time()
+    last_err = None
+    while time.time() - start < timeout:
+        try:
+            with open(children_path, "r") as f:
+                content = f.read().strip()
+            if content:
+                # content is a whitespace-separated list of pids
+                pids = [int(x) for x in content.split() if x.strip()]
+                if len(pids) >= 1:
+                    return pids[0]
+        except Exception as e:
+            last_err = e
+        time.sleep(0.05)
+    raise RuntimeError(f"Failed to find child PID for {parent_pid}: {last_err}")
+
+
+def read_valgrind_log(path="valgrind.log"):
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return f.read()
+    return ""
+
+
+def has_non_inherited_socket_fds(valgrind_output):
+    lines = valgrind_output.splitlines()
+    for i, line in enumerate(lines):
+        if "Open" in line and "socket" in line:
+            inherited = False
+            # valgrind prints "<inherited from parent>" on a subsequent line
+            for j in range(i + 1, min(i + 6, len(lines))):
+                if "<inherited from parent>" in lines[j]:
+                    inherited = True
+                    break
+            if not inherited:
+                return True
+    return False
+
+
+def list_non_inherited_open_fds(valgrind_output):
+    """Return human-readable lines describing open FDs not inherited.
+
+    We intentionally ignore entries marked as inherited from the parent process
+    (e.g. VS Code terminal PTYs, valgrind log FD passed down).
+    """
+    findings = []
+    lines = valgrind_output.splitlines()
+    for i, line in enumerate(lines):
+        if not line.strip().startswith("Open "):
+            continue
+
+        # Consider both "Open file descriptor" and various socket types.
+        if ("Open file descriptor" not in line) and ("socket" not in line):
+            continue
+
+        inherited = False
+        for j in range(i + 1, min(i + 6, len(lines))):
+            if "<inherited from parent>" in lines[j]:
+                inherited = True
+                break
+        if inherited:
+            continue
+
+        findings.append(line.strip())
+
+    return findings
+
 def wait_for_port(port, timeout=10):
     start = time.time()
     while time.time() - start < timeout:
@@ -18,6 +93,9 @@ def wait_for_port(port, timeout=10):
 
 def test_signal(sig, sig_name):
     print(f"Testing {sig_name}...")
+
+    if os.path.exists("valgrind.log"):
+        os.remove("valgrind.log")
     
     # Valgrind command
     # We use --error-exitcode=100 to detect memory errors
@@ -27,6 +105,8 @@ def test_signal(sig, sig_name):
         "--show-leak-kinds=all",
         "--track-fds=yes",
         "--error-exitcode=100",
+        "--log-file=valgrind.log",
+        "--verbose",
         "./webserv",
         "sample/08_signal_test/webserv.conf"
     ]
@@ -48,10 +128,20 @@ def test_signal(sig, sig_name):
         print("STDERR:", stderr.decode())
         return False
 
-    print(f"Server started (PID {proc.pid}). Sending {sig_name}...")
+    target_pid = proc.pid
+    try:
+        # Some setups run the client within the same PID as valgrind.
+        # If a child exists, we prefer signaling the child.
+        target_pid = find_single_child_pid(proc.pid, timeout=0.5)
+        print(
+            f"Server started (valgrind PID {proc.pid}, webserv PID {target_pid}). Sending {sig_name}..."
+        )
+    except Exception:
+        print(f"Server started (PID {proc.pid}). Sending {sig_name}...")
     
     # Send signal
-    os.kill(proc.pid, sig)
+    os.kill(target_pid, sig)
+    time.sleep(1)
     
     try:
         stdout, stderr = proc.communicate(timeout=5)
@@ -63,9 +153,14 @@ def test_signal(sig, sig_name):
         return False
 
     rc = proc.returncode
-    print(f"Server exited with {rc}")
+    print(f"Valgrind exited with {rc}")
     
-    stderr_str = stderr.decode()
+    stderr_str = read_valgrind_log("valgrind.log")
+
+    if rc != 0 and rc != 100:
+        print("Non-zero exit code detected")
+        print(stderr_str)
+        return False
     
     # Check for valgrind errors
     if rc == 100:
@@ -73,11 +168,17 @@ def test_signal(sig, sig_name):
         print(stderr_str)
         return False
         
-    if "Open file descriptor" in stderr_str:
-         if "socket" in stderr_str:
-             print("Open socket descriptors detected!")
-             print(stderr_str)
-             return False
+    if has_non_inherited_socket_fds(stderr_str):
+        print("Open socket descriptors detected (not inherited)!")
+        print(stderr_str)
+        return False
+
+    non_inherited_fds = list_non_inherited_open_fds(stderr_str)
+    if non_inherited_fds:
+        print("Open file descriptors detected (not inherited)!")
+        print("\n".join(non_inherited_fds))
+        print(stderr_str)
+        return False
 
     # Check for leaks summary
     if "All heap blocks were freed" in stderr_str:
@@ -99,6 +200,9 @@ def test_signal(sig, sig_name):
 
 def test_signal_busy(sig, sig_name):
     print(f"Testing {sig_name} (Busy)...")
+
+    if os.path.exists("valgrind.log"):
+        os.remove("valgrind.log")
     
     cmd = [
         "valgrind",
@@ -106,6 +210,7 @@ def test_signal_busy(sig, sig_name):
         "--show-leak-kinds=all",
         "--track-fds=yes",
         "--error-exitcode=100",
+        "--log-file=valgrind.log",
         "./webserv",
         "sample/08_signal_test/webserv.conf"
     ]
@@ -126,7 +231,14 @@ def test_signal_busy(sig, sig_name):
         print("STDERR:", stderr.decode())
         return False
 
-    print(f"Server started (PID {proc.pid}). sending partial request...")
+    target_pid = proc.pid
+    try:
+        target_pid = find_single_child_pid(proc.pid, timeout=0.5)
+        print(
+            f"Server started (valgrind PID {proc.pid}, webserv PID {target_pid}). sending partial request..."
+        )
+    except Exception:
+        print(f"Server started (PID {proc.pid}). sending partial request...")
     
     # Open connection and send partial data
     try:
@@ -140,7 +252,7 @@ def test_signal_busy(sig, sig_name):
         return False
 
     print(f"Sending {sig_name}...")
-    os.kill(proc.pid, sig)
+    os.kill(target_pid, sig)
     
     try:
         stdout, stderr = proc.communicate(timeout=5)
@@ -157,18 +269,29 @@ def test_signal_busy(sig, sig_name):
     rc = proc.returncode
     print(f"Server exited with {rc}")
     
-    stderr_str = stderr.decode()
+    stderr_str = read_valgrind_log("valgrind.log")
+
+    if rc != 0 and rc != 100:
+        print("Non-zero exit code detected")
+        print(stderr_str)
+        return False
     
     if rc == 100:
         print("Valgrind reported errors!")
         print(stderr_str)
         return False
 
-    if "Open file descriptor" in stderr_str:
-         if "socket" in stderr_str:
-             print("Open socket descriptors detected!")
-             print(stderr_str)
-             return False
+    if has_non_inherited_socket_fds(stderr_str):
+        print("Open socket descriptors detected (not inherited)!")
+        print(stderr_str)
+        return False
+
+    non_inherited_fds = list_non_inherited_open_fds(stderr_str)
+    if non_inherited_fds:
+        print("Open file descriptors detected (not inherited)!")
+        print("\n".join(non_inherited_fds))
+        print(stderr_str)
+        return False
 
     if "All heap blocks were freed" in stderr_str:
         pass
@@ -189,6 +312,9 @@ def test_signal_busy(sig, sig_name):
 
 def test_signal_upload(sig, sig_name):
     print(f"Testing {sig_name} (Upload)...")
+
+    if os.path.exists("valgrind.log"):
+        os.remove("valgrind.log")
     
     cmd = [
         "valgrind",
@@ -196,6 +322,7 @@ def test_signal_upload(sig, sig_name):
         "--show-leak-kinds=all",
         "--track-fds=yes",
         "--error-exitcode=100",
+        "--log-file=valgrind.log",
         "./webserv",
         "sample/08_signal_test/webserv.conf"
     ]
@@ -216,7 +343,14 @@ def test_signal_upload(sig, sig_name):
         print("STDERR:", stderr.decode())
         return False
 
-    print(f"Server started (PID {proc.pid}). sending large body...")
+    target_pid = proc.pid
+    try:
+        target_pid = find_single_child_pid(proc.pid, timeout=0.5)
+        print(
+            f"Server started (valgrind PID {proc.pid}, webserv PID {target_pid}). sending large body..."
+        )
+    except Exception:
+        print(f"Server started (PID {proc.pid}). sending large body...")
 
     # Open connection and send large body slowly
     try:
@@ -232,7 +366,7 @@ def test_signal_upload(sig, sig_name):
         return False
 
     print(f"Sending {sig_name}...")
-    os.kill(proc.pid, sig)
+    os.kill(target_pid, sig)
     
     try:
         stdout, stderr = proc.communicate(timeout=5)
@@ -249,18 +383,29 @@ def test_signal_upload(sig, sig_name):
     rc = proc.returncode
     print(f"Server exited with {rc}")
     
-    stderr_str = stderr.decode()
+    stderr_str = read_valgrind_log("valgrind.log")
+
+    if rc != 0 and rc != 100:
+        print("Non-zero exit code detected")
+        print(stderr_str)
+        return False
     
     if rc == 100:
         print("Valgrind reported errors!")
         print(stderr_str)
         return False
         
-    if "Open file descriptor" in stderr_str:
-         if "socket" in stderr_str:
-             print("Open socket descriptors detected!")
-             print(stderr_str)
-             return False
+    if has_non_inherited_socket_fds(stderr_str):
+        print("Open socket descriptors detected (not inherited)!")
+        print(stderr_str)
+        return False
+
+    non_inherited_fds = list_non_inherited_open_fds(stderr_str)
+    if non_inherited_fds:
+        print("Open file descriptors detected (not inherited)!")
+        print("\n".join(non_inherited_fds))
+        print(stderr_str)
+        return False
 
     if "All heap blocks were freed" in stderr_str:
         pass
@@ -281,6 +426,9 @@ def test_signal_upload(sig, sig_name):
 
 def test_signal_cgi(sig, sig_name):
     print(f"Testing {sig_name} (CGI)...")
+
+    if os.path.exists("valgrind.log"):
+        os.remove("valgrind.log")
     
     cmd = [
         "valgrind",
@@ -288,6 +436,7 @@ def test_signal_cgi(sig, sig_name):
         "--show-leak-kinds=all",
         "--track-fds=yes",
         "--error-exitcode=100",
+        "--log-file=valgrind.log",
         "./webserv",
         "sample/08_signal_test/webserv.conf"
     ]
@@ -308,7 +457,14 @@ def test_signal_cgi(sig, sig_name):
         print("STDERR:", stderr.decode())
         return False
 
-    print(f"Server started (PID {proc.pid}). requesting slow CGI...")
+    target_pid = proc.pid
+    try:
+        target_pid = find_single_child_pid(proc.pid, timeout=0.5)
+        print(
+            f"Server started (valgrind PID {proc.pid}, webserv PID {target_pid}). requesting slow CGI..."
+        )
+    except Exception:
+        print(f"Server started (PID {proc.pid}). requesting slow CGI...")
 
     # Request slow CGI
     try:
@@ -321,7 +477,7 @@ def test_signal_cgi(sig, sig_name):
         return False
 
     print(f"Sending {sig_name}...")
-    os.kill(proc.pid, sig)
+    os.kill(target_pid, sig)
     
     try:
         stdout, stderr = proc.communicate(timeout=5)
@@ -338,18 +494,29 @@ def test_signal_cgi(sig, sig_name):
     rc = proc.returncode
     print(f"Server exited with {rc}")
     
-    stderr_str = stderr.decode()
+    stderr_str = read_valgrind_log("valgrind.log")
+
+    if rc != 0 and rc != 100:
+        print("Non-zero exit code detected")
+        print(stderr_str)
+        return False
     
     if rc == 100:
         print("Valgrind reported errors!")
         print(stderr_str)
         return False
         
-    if "Open file descriptor" in stderr_str:
-         if "socket" in stderr_str:
-             print("Open socket descriptors detected!")
-             print(stderr_str)
-             return False
+    if has_non_inherited_socket_fds(stderr_str):
+        print("Open socket descriptors detected (not inherited)!")
+        print(stderr_str)
+        return False
+
+    non_inherited_fds = list_non_inherited_open_fds(stderr_str)
+    if non_inherited_fds:
+        print("Open file descriptors detected (not inherited)!")
+        print("\n".join(non_inherited_fds))
+        print(stderr_str)
+        return False
 
     if "All heap blocks were freed" in stderr_str:
         pass

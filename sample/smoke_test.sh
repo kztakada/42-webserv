@@ -397,3 +397,5 @@ run_sample sample/07_delete/webserv.conf bash -lc '
 '
 
 echo "All sample smoke checks passed."
+# --- 08_signal_test ---
+bash sample/08_signal_test/run.sh

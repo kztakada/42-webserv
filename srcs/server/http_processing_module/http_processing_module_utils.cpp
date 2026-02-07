@@ -62,6 +62,13 @@ Result<void> HttpProcessingModule::buildProcessorOutputOrServerError(
             context.socket_fd.getServerPort(), context.response);
     if (pr.isOk())
     {
+        // 成功時、201(Created) ならばアップロードが成功したとみなして
+        // body_store を commit する。
+        if (context.request.getMethod() == http::HttpMethod::POST &&
+            context.response.getStatus() == http::HttpStatus::CREATED)
+        {
+            context.request_handler.bodyStore().commit();
+        }
         *out = pr.unwrap();
         return Result<void>();
     }

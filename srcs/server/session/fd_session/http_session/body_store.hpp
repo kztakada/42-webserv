@@ -36,6 +36,7 @@ class BodyStore
     size_t size() const { return size_bytes_; }
 
     void reset();
+    void commit() { is_committed_ = true; }
 
    private:
     std::string default_path_;
@@ -45,6 +46,7 @@ class BodyStore
 
     bool remove_on_reset_;
     bool allow_overwrite_;
+    bool is_committed_;
 
     BodyStore();
     BodyStore(const BodyStore& rhs);

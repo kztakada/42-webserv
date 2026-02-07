@@ -154,6 +154,13 @@ Result<TcpConnectionSocketFd*> TcpListenSocketFd::accept()
             ::accept(fd_, (struct sockaddr*)&client_addr, &client_len);
         if (conn_fd >= 0)
         {
+            Result<void> nb = setNonBlocking_(conn_fd);
+            if (nb.isError())
+            {
+                ::close(conn_fd);
+                return Result<TcpConnectionSocketFd*>(ERROR, nb.getErrorMessage());
+            }
+
             SocketAddress client_socket_addr(client_addr);
 
             // listen_addr_ は bind() 時のアドレスなので、wildcard(0.0.0.0)

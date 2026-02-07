@@ -77,11 +77,19 @@ int FdSessionController::getNextTimeoutMs() const
     }
 
     if (!found)
-        return -1;
+    {
+        // シグナル受信が waitEvents 呼び出し直前（should_stop_ チェック後）に
+        // 発生した場合、waitEvents で無限にブロックしてしまうのを防ぐため、
+        // タイムアウトを最大1秒に設定する。
+        return 1000;
+    }
 
     const long ms = min_remaining_sec * 1000L;
-    if (ms > 2147483647L)
-        return 2147483647;
+    if (ms < 0 || ms > 1000)
+    {
+        // 同上の理由により、最大1秒でwaitを解除する。
+        return 1000;
+    }
     return static_cast<int>(ms);
 }
 

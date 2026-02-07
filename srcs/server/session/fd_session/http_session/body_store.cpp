@@ -46,7 +46,8 @@ BodyStore::BodyStore(const void* unique_key)
       write_fd_(-1),
       size_bytes_(0),
       remove_on_reset_(true),
-      allow_overwrite_(true)
+      allow_overwrite_(true),
+      is_committed_(false)
 {
 }
 
@@ -61,7 +62,8 @@ void BodyStore::reset()
     }
     size_bytes_ = 0;
 
-    if (remove_on_reset_)
+    // upload_store の場合でも、正常完了（commit）していなければ削除する。
+    if (remove_on_reset_ || !is_committed_)
     {
         // 使い回し方針でも「残骸を残さない」ために削除を試みる。
         // 失敗しても致命ではないので、呼び出し側が必要なら結果を確認する。
@@ -72,6 +74,7 @@ void BodyStore::reset()
     path_ = default_path_;
     remove_on_reset_ = true;
     allow_overwrite_ = true;
+    is_committed_ = false;
 }
 
 Result<void> BodyStore::configureForUpload(

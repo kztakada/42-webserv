@@ -77,6 +77,7 @@ void Server::start()
     is_running_ = true;
 
     running_instance_ = this;
+
     signal(SIGINT, signalHandler);   // Ctrl+C
     signal(SIGTERM, signalHandler);  // kill
     signal(SIGPIPE, SIG_IGN);        // SIGPIPE無視（write時のエラーで処理）
@@ -84,7 +85,10 @@ void Server::start()
     while (!should_stop_)
     {
         // 1. 次のタイムアウト時間を計算
+        // getNextTimeoutMs() 内で最大1秒(1000ms)に制限されており、
+        // 定期的に should_stop_ チェックが走るようになっている。
         int timeout_ms = session_controller_->getNextTimeoutMs();
+
         // 2. イベント待機
         Result<const std::vector<FdEvent>&> events_result =
             reactor_->waitEvents(timeout_ms);

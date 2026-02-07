@@ -40,7 +40,6 @@ class ProcessRequestAction;
 class SendErrorAction;
 class ExecuteCgiAction;
 
-// HTTPセッション：HTTPリクエスト/レスポンスの処理状態を管理
 class HttpSession : public FdSession
 {
    public:

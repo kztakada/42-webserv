@@ -1,0 +1,7 @@
+.git/
+*.o
+webserv
+
+google_test
+objs
+objs_test

@@ -115,29 +115,12 @@ class Log
         os << label << p1 << " " << p2 << std::endl;
     }
 
-    // 引数3つの実装
-    template <typename T1, typename T2, typename T3>
-    static void log_core(std::ostream& os, const char* label, const T1& p1,
-        const T2& p2, const T3& p3)
-    {
-        os << label << "(" << p1 << ") " << p2 << " " << p3 << std::endl;
-    }
-
     // 引数4つの実装
     template <typename T1, typename T2, typename T3, typename T4>
     static void log_core(std::ostream& os, const char* label, const T1& p1,
         const T2& p2, const T3& p3, const T4& p4)
     {
         os << label << p1 << " " << p2 << " " << p3 << " " << p4 << std::endl;
-    }
-
-    // 引数5つの実装
-    template <typename T1, typename T2, typename T3, typename T4, typename T5>
-    static void log_core(std::ostream& os, const char* label, const T1& p1,
-        const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-    {
-        os << label << p1 << " " << p2 << " " << p3 << " " << p4 << " " << p5
-           << std::endl;
     }
 
     static void failedToOpenLogFile(FileType type)

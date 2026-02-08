@@ -2,6 +2,7 @@
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "utils/log.hpp"
 
 namespace server
 {
@@ -65,10 +66,23 @@ Result<void> SendResponseState::handleEvent(
             context.context_.socket_fd.getFd());
         if (n < 0)
         {
+            // バックプレッシャー発生時ログ出力
+            if (!context.context_.in_write_backpressure)
+            {
+                context.context_.in_write_backpressure = true;
+                utils::Log::warning("Write BackPressure occurred");
+            }
             // 実装規定: read/write 後の errno 分岐は禁止。
             return Result<void>();
         }
+        // バックプレッシャーログ出力後、解除する
+        if (n > 0 && context.context_.in_write_backpressure)
+            context.context_.in_write_backpressure = false;
     }
+
+    if (context.context_.send_buffer.size() == 0 &&
+        context.context_.in_write_backpressure)
+        context.context_.in_write_backpressure = false;
 
     // 送信バッファが空で、レスポンス完了なら次へ
     if (context.context_.send_buffer.size() == 0 &&

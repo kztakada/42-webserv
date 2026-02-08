@@ -40,6 +40,9 @@ struct SessionContext
     bool socket_watch_read;
     bool socket_watch_write;
 
+    bool in_read_backpressure;
+    bool in_write_backpressure;
+
     CgiSession* active_cgi_session;
     HttpRequestHandler request_handler;
 

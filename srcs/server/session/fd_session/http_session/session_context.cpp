@@ -24,6 +24,8 @@ SessionContext::SessionContext(int fd, const SocketAddress& server_addr,
       should_close_connection(false),
       socket_watch_read(false),
       socket_watch_write(false),
+      in_read_backpressure(false),
+      in_write_backpressure(false),
       active_cgi_session(NULL),
       request_handler(
           request, rt, socket_fd.getServerIp(), socket_fd.getServerPort(), this)

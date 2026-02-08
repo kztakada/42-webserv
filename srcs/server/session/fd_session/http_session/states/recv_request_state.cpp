@@ -1,6 +1,7 @@
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "utils/log.hpp"
 
 namespace server
 {
@@ -41,6 +42,12 @@ Result<void> RecvRequestState::handleEvent(
             if (c.isError())
                 return c;
 
+            // バックプレッシャーが解除した場合に更新する
+            if (context.context_.in_read_backpressure &&
+                context.context_.recv_buffer.size() <
+                    HttpSession::kMaxRecvBufferBytes)
+                context.context_.in_read_backpressure = false;
+
             // 消費の結果として状態遷移待ちならここで終了。
             if (context.context_.pending_state != NULL)
                 break;
@@ -49,6 +56,12 @@ Result<void> RecvRequestState::handleEvent(
             if (context.context_.recv_buffer.size() >=
                 HttpSession::kMaxRecvBufferBytes)
             {
+                // バックプレッシャー発生時ログ出力
+                if (!context.context_.in_read_backpressure)
+                {
+                    context.context_.in_read_backpressure = true;
+                    utils::Log::warning("Read BackPressure occurred");
+                }
                 (void)context.updateSocketWatches_();
                 break;
             }

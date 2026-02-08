@@ -338,9 +338,9 @@ Result<void> CgiSession::handleStderr_(FdEventType type)
     // stderr はログに出す（大量なら本来制限したい）
     if (stderr_buffer_.size() > 0)
     {
-        utils::Log::error(
-            "CGI stderr: ", std::string(stderr_buffer_.data(),
-                                stderr_buffer_.data() + stderr_buffer_.size()));
+        utils::Log::error("CgiSession", "CGI stderr:",
+            std::string(stderr_buffer_.data(),
+                stderr_buffer_.data() + stderr_buffer_.size()));
         stderr_buffer_.consume(stderr_buffer_.size());
     }
 

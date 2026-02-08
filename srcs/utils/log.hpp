@@ -5,84 +5,68 @@
 #include <iostream>
 #include <string>
 
+#include "network/ip_address.hpp"
+#include "network/port_type.hpp"
+#include "utils/path.hpp"
+#include "utils/timestamp.hpp"
+
 namespace utils
 {
 class Log
 {
    public:
-    // errorログ出力（可変引数対応）
+    // プログラムの実行状態を出力
     template <typename T1>
-    static void error(const T1& p1)
+    static void display(const T1& p1)
     {
-        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
-        if (ofs)
-            log_core(ofs, "[ERROR] ", p1);
-        else
-            failedToOpenLogFile();
+        log_core(std::cerr, "", p1);
     }
-    template <typename T1, typename T2>
-    static void error(const T1& p1, const T2& p2)
+    static void displayListen(const IPAddress& ip, const PortType& port)
     {
-        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
-        if (ofs)
-            log_core(ofs, "[ERROR] ", p1, p2);
-        else
-            failedToOpenLogFile();
+        log_core(std::cerr, "Server listening on ",
+            ip.toString() + ":" + port.toString());
     }
+
+    enum FileType
+    {
+        INFO,
+        ERROR,
+        F_DEBUG
+    };
+    // errorログをファイルに出力
     template <typename T1, typename T2, typename T3>
     static void error(const T1& p1, const T2& p2, const T3& p3)
     {
-        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
+        std::ofstream ofs(getFilePath(ERROR), std::ios::app);
         if (ofs)
-            log_core(ofs, "[ERROR] ", p1, p2, p3);
+            log_core(ofs, "[ERROR] ", Timestamp::now(), p1, p2, p3);
         else
-            failedToOpenLogFile();
+            failedToOpenLogFile(ERROR);
     }
-    template <typename T1, typename T2, typename T3, typename T4>
-    static void error(const T1& p1, const T2& p2, const T3& p3, const T4& p4)
-    {
-        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
-        if (ofs)
-            log_core(ofs, "[ERROR] ", p1, p2, p3, p4);
-        else
-            failedToOpenLogFile();
-    }
-    template <typename T1, typename T2, typename T3, typename T4, typename T5>
-    static void error(
-        const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-    {
-        std::ofstream ofs(error_file_path_.c_str(), std::ios::app);
-        if (ofs)
-            log_core(ofs, "[ERROR] ", p1, p2, p3, p4, p5);
-        else
-            failedToOpenLogFile();
-    }
-    // infoログ出力（可変引数対応）
+
+    // infoログ出力
     template <typename T1>
     static void info(const T1& p1)
     {
-        log_core(std::cerr, "[INFO] ", p1);
+        std::ofstream ofs(getFilePath(INFO), std::ios::app);
+        if (ofs)
+            log_core(ofs, "[INFO] ", Timestamp::now(), p1);
+        else
+            failedToOpenLogFile(INFO);
     }
-    template <typename T1, typename T2>
-    static void info(const T1& p1, const T2& p2)
+    // debugログ出力
+    template <typename T1>
+    static void debug(const T1& p1)
     {
-        log_core(std::cerr, "[INFO] ", p1, p2);
-    }
-    template <typename T1, typename T2, typename T3>
-    static void info(const T1& p1, const T2& p2, const T3& p3)
-    {
-        log_core(std::cerr, "[INFO] ", p1, p2, p3);
-    }
-    template <typename T1, typename T2, typename T3, typename T4>
-    static void info(const T1& p1, const T2& p2, const T3& p3, const T4& p4)
-    {
-        log_core(std::cerr, "[INFO] ", p1, p2, p3, p4);
-    }
-    template <typename T1, typename T2, typename T3, typename T4, typename T5>
-    static void info(
-        const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-    {
-        log_core(std::cerr, "[INFO] ", p1, p2, p3, p4, p5);
+#ifdef DEBUG
+        std::ofstream ofs(getFilePath(F_DEBUG), std::ios::app);
+        if (ofs)
+            log_core(ofs, "[DEBUG] ", Timestamp::now(), p1);
+        else
+            failedToOpenLogFile(F_DEBUG);
+#else
+        (void)p1;
+#endif
     }
     // warningログ出力（可変引数対応）
     template <typename T1>
@@ -111,43 +95,6 @@ class Log
     {
         log_core(std::cerr, "[WARNING] ", p1, p2, p3, p4, p5);
     }
-    // debugログ出力（可変引数対応）
-    template <typename T1>
-    static void debug(const T1& p1)
-    {
-#ifdef DEBUG
-        log_core(std::cerr, "[DEBUG] ", p1);
-#endif
-    }
-    template <typename T1, typename T2>
-    static void debug(const T1& p1, const T2& p2)
-    {
-#ifdef DEBUG
-        log_core(std::cerr, "[DEBUG] ", p1, p2);
-#endif
-    }
-    template <typename T1, typename T2, typename T3>
-    static void debug(const T1& p1, const T2& p2, const T3& p3)
-    {
-#ifdef DEBUG
-        log_core(std::cerr, "[DEBUG] ", p1, p2, p3);
-#endif
-    }
-    template <typename T1, typename T2, typename T3, typename T4>
-    static void debug(const T1& p1, const T2& p2, const T3& p3, const T4& p4)
-    {
-#ifdef DEBUG
-        log_core(std::cerr, "[DEBUG] ", p1, p2, p3, p4);
-#endif
-    }
-    template <typename T1, typename T2, typename T3, typename T4, typename T5>
-    static void debug(
-        const T1& p1, const T2& p2, const T3& p3, const T4& p4, const T5& p5)
-    {
-#ifdef DEBUG
-        log_core(std::cerr, "[DEBUG] ", p1, p2, p3, p4, p5);
-#endif
-    }
 
    private:
     Log();
@@ -155,7 +102,17 @@ class Log
     Log& operator=(const Log& other);
     ~Log();
 
-    static std::string error_file_path_;
+    static const char* getFilePath(FileType type)
+    {
+        if (type == ERROR)
+            return "./logs/error.txt";
+        if (type == INFO)
+            return "./logs/info.txt";
+        if (type == F_DEBUG)
+            return "./logs/debug.txt";
+        else
+            return "./logs/default.txt";
+    }
 
     // 引数1つの実装
     template <typename T1>
@@ -177,7 +134,7 @@ class Log
     static void log_core(std::ostream& os, const char* label, const T1& p1,
         const T2& p2, const T3& p3)
     {
-        os << label << p1 << " " << p2 << " " << p3 << std::endl;
+        os << label << "(" << p1 << ") " << p2 << " " << p3 << std::endl;
     }
 
     // 引数4つの実装
@@ -197,9 +154,10 @@ class Log
            << std::endl;
     }
 
-    static void failedToOpenLogFile()
+    static void failedToOpenLogFile(FileType type)
     {
-        std::cerr << "[ERROR] Failed to open log file." << std::endl;
+        std::cerr << "[ERROR] Failed to open log file." << " at "
+                  << getFilePath(type) << std::endl;
     }
 };
 

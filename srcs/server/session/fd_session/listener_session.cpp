@@ -59,8 +59,8 @@ void ListenerSession::acceptNewConnection()
         Result<TcpConnectionSocketFd*> accept_result = listen_fd_->accept();
         if (accept_result.isError())
         {
-            utils::Log::error("ListenerSession accept() failed: ",
-                accept_result.getErrorMessage());
+            utils::Log::error("ListenerSession",
+                "accept() failed:", accept_result.getErrorMessage());
             return;
         }
 
@@ -81,7 +81,7 @@ void ListenerSession::acceptNewConnection()
         Result<void> d = controller_.delegateSession(s);
         if (d.isError())
         {
-            utils::Log::error(
+            utils::Log::error("ListenerSession",
                 "delegateSession(HttpSession) failed: ", d.getErrorMessage());
             delete s;
         }

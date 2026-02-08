@@ -193,16 +193,16 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
     Result<void> ready = ctx.request_handler.onRequestReady();
     if (ready.isError())
     {
-        utils::Log::error(
-            "Dispatcher: onRequestReady failed: ", ready.getErrorMessage());
+        utils::Log::error("RequestDispatcher",
+            "onRequestReady failed:", ready.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
     Result<void> fu = finalizeUploadStoreIfNeeded_(ctx);
     if (fu.isError())
     {
-        utils::Log::error(
-            "Dispatcher: finalizeUploadStore failed: ", fu.getErrorMessage());
+        utils::Log::error("RequestDispatcher",
+            "finalizeUploadStore failed:", fu.getErrorMessage());
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 

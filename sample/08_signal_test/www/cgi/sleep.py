@@ -3,6 +3,6 @@ import time
 import sys
 
 time.sleep(5)
-print("Content-Type: text/plain
-
-CGI Done")
+sys.stdout.write("Content-Type: text/plain\r\n\r\n")
+sys.stdout.write("CGI Done\n")
+sys.stdout.flush()

@@ -73,7 +73,8 @@ Result<void> HttpProcessingModule::buildProcessorOutputOrServerError(
         return Result<void>();
     }
 
-    utils::Log::error("RequestProcessor error: ", pr.getErrorMessage());
+    utils::Log::error("HttpProcessingModule",
+        "RequestProcessor error:", pr.getErrorMessage());
 
     Result<void> bo =
         buildErrorOutput(context, http::HttpStatus::SERVER_ERROR, out);

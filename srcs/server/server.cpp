@@ -82,6 +82,7 @@ void Server::start()
     signal(SIGTERM, signalHandler);  // kill
     signal(SIGPIPE, SIG_IGN);        // SIGPIPE無視（write時のエラーで処理）
 
+    Log::display("Server started.");
     while (!should_stop_)
     {
         // 1. 次のタイムアウト時間を計算
@@ -96,7 +97,8 @@ void Server::start()
         {
             if (should_stop_)
                 break;
-            Log::error("Event wait failed: ", events_result.getErrorMessage());
+            Log::error("Server",
+                "Event wait failed:", events_result.getErrorMessage());
             continue;
         }
         // イベント取得成功
@@ -111,7 +113,7 @@ void Server::start()
 
     session_controller_->clearAllSessions();
     reactor_->clearAllEvents();
-    Log::info("Server stopped.");
+    Log::display("Server stopped.");
     is_running_ = false;
 }
 
@@ -161,6 +163,7 @@ Result<void> Server::initialize()
             delete listener;
             return Result<void>(ERROR, d.getErrorMessage());
         }
+        Log::displayListen(listens[i].host_ip, listens[i].port);
     }
 
     return Result<void>();

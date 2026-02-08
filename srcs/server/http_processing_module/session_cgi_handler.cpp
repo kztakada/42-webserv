@@ -147,7 +147,7 @@ Result<void> SessionCgiHandler::handleCgiError_(
     if (!dynamic_cast<ExecuteCgiState*>(ctx.current_state))
         return Result<void>();
 
-    utils::Log::error("CGI error: ", message);
+    utils::Log::error("SessionCgiHandler", "CGI error:", message);
 
     const int stdout_fd = cgi.releaseStdoutFd();
     if (stdout_fd >= 0)

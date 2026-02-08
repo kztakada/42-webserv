@@ -35,9 +35,15 @@ clean:
 fclean: clean
 	$(RM) $(NAME)
 
-re: fclean all
+re:
+	$(MAKE) fclean
+	$(MAKE) all
 
-.PHONY: all re clean fclean
+debug:
+	$(MAKE) fclean
+	$(MAKE) all CXXFLAGS='$(CXXFLAGS) -DDEBUG'
+
+.PHONY: all re debug clean fclean
 
 ############ GooleTest ############
 

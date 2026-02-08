@@ -9,10 +9,12 @@ namespace server
 {
 
 ListenerSession::ListenerSession(TcpListenSocketFd* listen_fd,
-    FdSessionController& controller, HttpProcessingModule& module)
+    FdSessionController& controller, HttpProcessingModule& module,
+    utils::ProcessingLog* processing_log)
     : FdSession(controller, kNoTimeoutSeconds),
       listen_fd_(listen_fd),
-      module_(module)
+      module_(module),
+      processing_log_(processing_log)
 {
     updateLastActiveTime();
 }
@@ -76,15 +78,19 @@ void ListenerSession::acceptNewConnection()
         if (fd < 0)
             continue;
 
-        FdSession* s =
-            new HttpSession(fd, server_addr, client_addr, controller_, module_);
+        HttpSession* s = new HttpSession(fd, server_addr, client_addr,
+            controller_, module_, processing_log_);
         Result<void> d = controller_.delegateSession(s);
         if (d.isError())
         {
             utils::Log::error("ListenerSession",
                 "delegateSession(HttpSession) failed: ", d.getErrorMessage());
             delete s;
+            continue;
         }
+
+        if (s != NULL)
+            s->markCountedAsActiveConnection();
     }
 }
 

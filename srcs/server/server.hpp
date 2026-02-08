@@ -9,6 +9,7 @@
 #include "server/http_processing_module/http_processing_module.hpp"
 #include "server/reactor/fd_event_reactor.hpp"
 #include "server/session/fd_session_controller.hpp"
+#include "utils/log.hpp"
 #include "utils/result.hpp"
 
 namespace server
@@ -41,6 +42,9 @@ class Server
     FdEventReactor* reactor_;
     FdSessionController* session_controller_;
     HttpProcessingModule* http_processing_module_;
+
+    // 処理負荷計測ログ（1インスタンス）
+    utils::ProcessingLog processing_log_;
 
     // 設定オブジェクト
     ServerConfig config_;

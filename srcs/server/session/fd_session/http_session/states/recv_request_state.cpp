@@ -91,6 +91,8 @@ Result<void> RecvRequestState::handleEvent(
                 context.context_.socket_fd.getFd());
             if (n < 0)
             {
+                if (context.processingLog() != NULL)
+                    context.processingLog()->incrementBlockIo();  // ログ計測
                 // 実装規定: read/write 後の errno 分岐は禁止。
                 break;
             }
@@ -107,6 +109,11 @@ Result<void> RecvRequestState::handleEvent(
             // pipeline 等で recv_buffer に既に残りがある場合はログしない。
             if (n > 0 && is_new_request && before_read_buffer_size == 0)
             {
+                // ログ計測
+                context.context_.has_request_start_time = true;
+                context.context_.request_start_time_seconds =
+                    utils::Timestamp::nowEpochSeconds();
+
                 const std::string request_host =
                     context.context_.socket_fd.getServerIp().toString() + ":" +
                     context.context_.socket_fd.getServerPort().toString();

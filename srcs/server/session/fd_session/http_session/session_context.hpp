@@ -43,6 +43,10 @@ struct SessionContext
     bool in_read_backpressure;
     bool in_write_backpressure;
 
+    // リクエスト処理時間計測（最初の recv 時刻、秒単位）
+    bool has_request_start_time;
+    long request_start_time_seconds;
+
     CgiSession* active_cgi_session;
     HttpRequestHandler request_handler;
 

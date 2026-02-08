@@ -12,7 +12,8 @@ namespace server
 {
 
 CgiSession::CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
-    int request_body_fd, HttpSession* parent, FdSessionController& controller)
+    int request_body_fd, HttpSession* parent, FdSessionController& controller,
+    utils::ProcessingLog* processing_log)
     : FdSession(controller, kDefaultTimeoutSec),
       pid_(pid),
       pipe_in_(in_fd),
@@ -23,6 +24,8 @@ CgiSession::CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
       stderr_buffer_(),
       cgi_response_(),
       parent_session_(parent),
+      processing_log_(processing_log),
+      is_counted_as_active_cgi_(false),
       request_body_fd_(request_body_fd),
       is_stdout_eof_(false),
       is_stderr_eof_(false),
@@ -43,6 +46,9 @@ std::vector<utils::Byte> CgiSession::takePrefetchedBody()
 
 CgiSession::~CgiSession()
 {
+    if (processing_log_ != NULL && is_counted_as_active_cgi_)
+        processing_log_->onCgiFinished();  // ログ計測
+
     // reactor watch を残したまま delete すると UAF になるため、先に解除する。
     if (pipe_in_.getFd() >= 0)
         controller_.unregisterFd(pipe_in_.getFd());
@@ -97,6 +103,17 @@ CgiSession::~CgiSession()
         }
         pid_ = -1;
     }
+}
+
+// ログ計測
+void CgiSession::markCountedAsActiveCgi()
+{
+    if (processing_log_ == NULL)
+        return;
+    if (is_counted_as_active_cgi_)
+        return;
+    is_counted_as_active_cgi_ = true;
+    processing_log_->onCgiStarted();
 }
 
 bool CgiSession::isComplete() const
@@ -188,7 +205,11 @@ Result<void> CgiSession::fillStdinBufferIfNeeded_()
     char buf[4096];
     const ssize_t n = ::read(request_body_fd_, buf, sizeof(buf));
     if (n < 0)  // -1 は "今は進めない" として扱う。
+    {
+        if (processing_log_ != NULL)
+            processing_log_->incrementBlockIo();  // ログ計測
         return Result<void>();
+    }
 
     if (n == 0)
     {
@@ -230,6 +251,8 @@ Result<void> CgiSession::handleStdin_(FdEventType type)
         const ssize_t w = stdin_buffer_.flushToFd(pipe_in_.getFd());
         if (w < 0)
         {
+            if (processing_log_ != NULL)
+                processing_log_->incrementBlockIo();  // ログ計測
             // 実装規定: write 後の errno 分岐は禁止。
             return Result<void>();
         }
@@ -304,7 +327,11 @@ Result<void> CgiSession::handleStdout_(FdEventType type)
 
     // 実装規定: read 後の errno 分岐は禁止。
     if (r < 0)
+    {
+        if (processing_log_ != NULL)
+            processing_log_->incrementBlockIo();  // ログ計測
         return Result<void>();
+    }
 
     if (r == 0)
     {
@@ -325,7 +352,11 @@ Result<void> CgiSession::handleStderr_(FdEventType type)
 
     const ssize_t r = stderr_buffer_.fillFromFd(pipe_err_.getFd());
     if (r < 0)
+    {
+        if (processing_log_ != NULL)
+            processing_log_->incrementBlockIo();  // ログ計測
         return Result<void>();
+    }
 
     if (r == 0)
     {

@@ -70,6 +70,8 @@ Result<void> SendResponseState::handleEvent(
             context.context_.socket_fd.getFd());
         if (n < 0)
         {
+            if (context.processingLog() != NULL)
+                context.processingLog()->incrementBlockIo();  // ログ計測
             // バックプレッシャー発生時ログ出力
             if (!context.context_.in_write_backpressure)
             {
@@ -92,6 +94,20 @@ Result<void> SendResponseState::handleEvent(
     if (context.context_.send_buffer.size() == 0 &&
         context.context_.response.isComplete())
     {
+        // リクエスト処理時間（最初の recv 〜 send 完了）を記録　ログ計測
+        if (context.processingLog() != NULL &&
+            context.context_.has_request_start_time)
+        {
+            const long end_seconds = utils::Timestamp::nowEpochSeconds();
+            long elapsed =
+                end_seconds - context.context_.request_start_time_seconds;
+            if (elapsed < 0)
+                elapsed = 0;
+            context.processingLog()->recordRequestTimeSeconds(elapsed);
+        }
+        context.context_.has_request_start_time = false;
+        context.context_.request_start_time_seconds = 0;
+
         // レスポンス送信完了ログ（1回だけ）
         std::string request_host =
             context.context_.socket_fd.getServerIp().toString() + ":" +

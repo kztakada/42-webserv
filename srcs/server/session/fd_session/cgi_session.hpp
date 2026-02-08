@@ -13,6 +13,11 @@
 #include "server/session/io_buffer.hpp"
 #include "utils/result.hpp"
 
+namespace utils
+{
+class ProcessingLog;
+}
+
 namespace server
 {
 using namespace utils::result;
@@ -28,7 +33,7 @@ class CgiSession : public FdSession
 
     CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
         int request_body_fd, HttpSession* parent,
-        FdSessionController& controller);
+        FdSessionController& controller, utils::ProcessingLog* processing_log);
 
     virtual ~CgiSession();  // ここで確実に kill(pid_) と close を行う
 
@@ -36,6 +41,9 @@ class CgiSession : public FdSession
     virtual bool isComplete() const;
 
     virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
+
+    // ログ計測
+    void markCountedAsActiveCgi();
 
     HttpSession* getParentSession() const { return parent_session_; }
 
@@ -75,6 +83,10 @@ class CgiSession : public FdSession
 
     // --- 制御と外部連携 ---
     HttpSession* parent_session_;  // 親となるHttpSessionへのポインタ
+
+    // ログ計測
+    utils::ProcessingLog* processing_log_;
+    bool is_counted_as_active_cgi_;
 
     // HTTP Request Body を送る元（BodyStore の openForRead() のFD）。
     // -1 の場合はボディなし。

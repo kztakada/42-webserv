@@ -7,6 +7,11 @@
 #include "server/session/fd_session.hpp"
 #include "utils/result.hpp"
 
+namespace utils
+{
+class ProcessingLog;
+}
+
 namespace server
 {
 using namespace utils::result;
@@ -18,7 +23,8 @@ class ListenerSession : public FdSession
 {
    public:
     explicit ListenerSession(TcpListenSocketFd* listen_fd,
-        FdSessionController& controller, HttpProcessingModule& module);
+        FdSessionController& controller, HttpProcessingModule& module,
+        utils::ProcessingLog* processing_log);
     virtual ~ListenerSession();
 
     virtual bool isTimedOut() const;  // リスナーセッションはタイムアウトしない
@@ -35,6 +41,8 @@ class ListenerSession : public FdSession
 
     // --- 制御と外部連携 ---
     HttpProcessingModule& module_;  // Serverから渡される共有モジュール
+
+    utils::ProcessingLog* processing_log_;
 
     void acceptNewConnection();
 

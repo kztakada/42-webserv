@@ -26,6 +26,11 @@ namespace http
 class CgiResponse;
 }
 
+namespace utils
+{
+class ProcessingLog;
+}
+
 namespace server
 {
 using namespace utils::result;
@@ -54,8 +59,12 @@ class HttpSession : public FdSession
     // コンストラクタ・デストラクタ
     HttpSession(int fd, const SocketAddress& server_addr,
         const SocketAddress& client_addr, FdSessionController& controller,
-        HttpProcessingModule& module);
+        HttpProcessingModule& module, utils::ProcessingLog* processing_log);
     virtual ~HttpSession();
+
+    // ログ計測
+    utils::ProcessingLog* processingLog() const { return processing_log_; }
+    void markCountedAsActiveConnection();
 
     // for Watch初期設定
     virtual void getInitialWatchSpecs(std::vector<FdWatchSpec>* out) const;
@@ -89,6 +98,10 @@ class HttpSession : public FdSession
     SessionContext context_;
 
     HttpProcessingModule& module_;
+
+    // ログ計測
+    utils::ProcessingLog* processing_log_;
+    bool is_counted_as_active_connection_;
 
     HttpProcessingModule& module() { return module_; }
     const HttpProcessingModule& module() const { return module_; }

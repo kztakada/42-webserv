@@ -64,6 +64,7 @@ TEST_PROD_SRCS ?= \
 	srcs/network/ip_address.cpp \
 	srcs/network/port_type.cpp \
 	srcs/utils/path.cpp \
+	srcs/utils/timestamp.cpp \
 	srcs/utils/log.cpp \
 	srcs/http/http_request.cpp \
 	srcs/http/cgi_response.cpp \

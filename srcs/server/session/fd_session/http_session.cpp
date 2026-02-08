@@ -1,6 +1,7 @@
 #include "server/session/fd_session/http_session.hpp"
 
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
+#include "utils/log.hpp"
 
 namespace server
 {
@@ -9,10 +10,12 @@ using namespace utils::result;
 
 HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
     const SocketAddress& client_addr, FdSessionController& controller,
-    HttpProcessingModule& module)
+    HttpProcessingModule& module, utils::ProcessingLog* processing_log)
     : FdSession(controller, kDefaultTimeoutSec),
       context_(fd, server_addr, client_addr, module.router),
-      module_(module)
+      module_(module),
+      processing_log_(processing_log),
+      is_counted_as_active_connection_(false)
 {
     context_.current_state = new RecvRequestState();
     updateLastActiveTime();
@@ -20,7 +23,20 @@ HttpSession::HttpSession(int fd, const SocketAddress& server_addr,
 
 HttpSession::~HttpSession()
 {
+    if (processing_log_ != NULL && is_counted_as_active_connection_)
+        processing_log_->onConnectionClosed();  // ログ計測
     // cleanup is handled by SessionContext destructor
+}
+
+// ログ計測
+void HttpSession::markCountedAsActiveConnection()
+{
+    if (processing_log_ == NULL)
+        return;
+    if (is_counted_as_active_connection_)
+        return;
+    is_counted_as_active_connection_ = true;
+    processing_log_->onConnectionOpened();
 }
 
 void HttpSession::getInitialWatchSpecs(

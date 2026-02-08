@@ -97,8 +97,9 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
         return Result<void>(ERROR, spawned.getErrorMessage());
 
     const CgiSpawnResult s = spawned.unwrap();
-    ctx.active_cgi_session = new CgiSession(s.pid, s.stdin_fd, s.stdout_fd,
-        s.stderr_fd, request_body_fd, &session, controller_);
+    ctx.active_cgi_session =
+        new CgiSession(s.pid, s.stdin_fd, s.stdout_fd, s.stderr_fd,
+            request_body_fd, &session, controller_, session.processingLog());
 
     Result<void> d = controller_.delegateSession(ctx.active_cgi_session);
     if (d.isError())
@@ -107,6 +108,9 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
         ctx.active_cgi_session = NULL;
         return Result<void>(ERROR, d.getErrorMessage());
     }
+
+    if (ctx.active_cgi_session != NULL)
+        ctx.active_cgi_session->markCountedAsActiveCgi();  // ログ計測
 
     session.changeState(new ExecuteCgiState());
     (void)session.updateSocketWatches_();

@@ -82,6 +82,7 @@ void Server::start()
     signal(SIGTERM, signalHandler);  // kill
     signal(SIGPIPE, SIG_IGN);        // SIGPIPE無視（write時のエラーで処理）
 
+    processing_log_.run();  // ログ計測
     Log::display("Server started.");
     while (!should_stop_)
     {
@@ -99,22 +100,37 @@ void Server::start()
                 break;
             Log::error("Server",
                 "Event wait failed:", events_result.getErrorMessage());
+            processing_log_.tick();  // ログ計測
             continue;
         }
         // イベント取得成功
         const std::vector<FdEvent>& occurred_events = events_result.unwrap();
+
+        // ログ計測
+        const long loop_start_seconds = utils::Timestamp::nowEpochSeconds();
 
         // 3. イベント処理
         session_controller_->dispatchEvents(occurred_events);
 
         // 4. タイムアウト処理
         session_controller_->handleTimeouts();
+
+        // ログ計測
+        const long loop_end_seconds = utils::Timestamp::nowEpochSeconds();
+        const long loop_time_seconds = loop_end_seconds - loop_start_seconds;
+        if (loop_time_seconds > 0)
+            processing_log_.recordLoopTimeSeconds(loop_time_seconds);
+        else
+            processing_log_.recordLoopTimeSeconds(0);
+        processing_log_.tick();
     }
 
     session_controller_->clearAllSessions();
     reactor_->clearAllEvents();
     Log::display("Server stopped.");
     is_running_ = false;
+
+    processing_log_.stop();  // ログ計測
 }
 
 void Server::stop()
@@ -154,8 +170,8 @@ Result<void> Server::initialize()
         if (listen_fd.isError())
             return Result<void>(ERROR, listen_fd.getErrorMessage());
 
-        ListenerSession* listener = new ListenerSession(
-            listen_fd.unwrap(), *session_controller_, *http_processing_module_);
+        ListenerSession* listener = new ListenerSession(listen_fd.unwrap(),
+            *session_controller_, *http_processing_module_, &processing_log_);
 
         Result<void> d = session_controller_->delegateSession(listener);
         if (d.isError())

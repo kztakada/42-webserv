@@ -67,7 +67,7 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
 
             // infoログ
             const std::string info_msg =
-                std::string("Host: ") + request_host + " Received request " +
+                std::string("Host: ") + request_host + " Accepted request " +
                 context_.request.getMethod().toString() + " " +
                 context_.request.getPath() + " from " +
                 context_.socket_fd.getClientIp().toString() + ":" +
@@ -80,7 +80,7 @@ Result<void> HttpSession::consumeRecvBufferWithoutRead_()
                 query.empty() ? context_.request.getPath()
                               : (context_.request.getPath() + "?" + query);
             const std::string debug_msg =
-                std::string("Host: ") + request_host + " Received request " +
+                std::string("Host: ") + request_host + " Accepted request " +
                 context_.request.getMethod().toString() + " " +
                 context_.request.getPath() + " from " +
                 context_.socket_fd.getClientIp().toString() + ":" +

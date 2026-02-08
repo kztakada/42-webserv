@@ -1,3 +1,7 @@
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
@@ -88,6 +92,32 @@ Result<void> SendResponseState::handleEvent(
     if (context.context_.send_buffer.size() == 0 &&
         context.context_.response.isComplete())
     {
+        // レスポンス送信完了ログ（1回だけ）
+        std::string request_host =
+            context.context_.socket_fd.getServerIp().toString() + ":" +
+            context.context_.socket_fd.getServerPort().toString();
+        Result<const std::vector<std::string>&> host_header =
+            context.context_.request.getHeader("Host");
+        if (host_header.isOk())
+        {
+            const std::vector<std::string>& values = host_header.unwrap();
+            if (!values.empty() && !values[0].empty() &&
+                request_host != values[0])
+                request_host = request_host + "(" + values[0] + ")";
+        }
+
+        const http::HttpStatus status = context.context_.response.getStatus();
+        std::string reason = context.context_.response.getReasonPhrase();
+        if (reason.empty())
+            reason = status.getMessage();
+
+        std::ostringstream oss;
+        oss << "Host: " << request_host << " Sent response " << status.getCode()
+            << " " << reason << " to "
+            << context.context_.socket_fd.getClientIp().toString() << ":"
+            << context.context_.socket_fd.getClientPort().toString();
+        utils::Log::info(oss.str());
+
         // 1レスポンス完了
         if (context.context_.response_writer != NULL)
         {

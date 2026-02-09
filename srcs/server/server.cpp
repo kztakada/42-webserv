@@ -82,6 +82,9 @@ void Server::start()
     signal(SIGTERM, signalHandler);  // kill
     signal(SIGPIPE, SIG_IGN);        // SIGPIPE無視（write時のエラーで処理）
 
+    utils::Log::clearFiles();
+    processing_log_.clearFile();
+
     processing_log_.run();  // ログ計測
     Log::display("Server started.");
     while (!should_stop_)

@@ -14,6 +14,8 @@
 
 namespace utils
 {
+class Log;
+class ProcessingLog;
 
 class ProcessingLog
 {
@@ -90,6 +92,12 @@ class ProcessingLog
     }
 
     void incrementBlockIo() { ++block_io_count_; }
+
+    void clearFile()
+    {
+        std::ofstream ofs(getFilePath_(), std::ios::trunc);
+        ofs.close();
+    }
 
    private:
     bool is_running_;
@@ -212,6 +220,17 @@ class Log
 #else
         (void)p1;
 #endif
+    }
+    static void clearFiles()
+    {
+        std::ofstream ofs(getFilePath(INFO), std::ios::trunc);
+        ofs.close();
+        ofs.open(getFilePath(ERROR), std::ios::trunc);
+        ofs.close();
+        ofs.open(getFilePath(WARNING), std::ios::trunc);
+        ofs.close();
+        ofs.open(getFilePath(F_DEBUG), std::ios::trunc);
+        ofs.close();
     }
 
    private:

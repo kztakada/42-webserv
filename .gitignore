@@ -13,6 +13,7 @@ tester
 logs/error.txt
 logs/debug.txt
 logs/info.txt
+logs/warning.txt
 logs/processing.txt
 
 valgrind.log

@@ -72,6 +72,10 @@ class HttpSession : public FdSession
     // イベントハンドラ
     virtual Result<void> handleEvent(const FdEvent& event);
 
+    // CGI 実行中は CGI 側のタイムアウトで 504 等を組み立てたいので、
+    // HttpSession 自体の timeout 判定は抑制する。
+    virtual bool isTimedOut() const;
+
     // セッション完了判定
     virtual bool isComplete() const;
 
@@ -116,6 +120,11 @@ class HttpSession : public FdSession
 
     // http_session_watch.cpp
     Result<void> updateSocketWatches_();
+
+    // CGI stdout など、socket 以外の body fd を watch する（SendResponseState
+    // 用）
+    Result<void> setBodyWatchFd_(int fd);
+    void clearBodyWatch_();
 
     // http_session_prepare.cpp
     Result<void> consumeRecvBufferWithoutRead_();

@@ -150,6 +150,12 @@ location が一致しない場合でも、`route()` 自体は OK を返します
 RequestRouter の責務は「virtual server / location の選択」と「URI の正規化」です。
 物理パスの確定やファイル存在確認などの FS アクセスは、基本的に Session 層で行います。
 
+例外（CGI）:
+
+- CGI 拡張子がマッチした場合に限り、ルーティング（`LocationRouting::decideAction_()`）がスクリプト実体を `stat()` し、
+	- 不在/regular file でない場合は `404 Not Found`（`RESPOND_ERROR`）を確定させます。
+	- ねらい: 「スクリプト不在（404）」と「CGI実行時異常（502/504）」を区別するため。
+
 Session 層は、必要に応じて LocationRouting の API から「安全な物理パス」を取得します。
 
 - 静的ファイル: `LocationRouting::resolvePhysicalPathUnderRootOrError()`

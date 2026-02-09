@@ -439,6 +439,9 @@ TEST(LocationRouting, CgiContextSplitsScriptNameAndPathInfo)
     const std::string root = makeTempDirOrDie_();
     mkdirOrDie_(root + "/cgi-bin");
 
+    // script 実体がない場合は 404 になる仕様のため、ダミーを作成しておく
+    writeFileOrDie_(root + "/test.cgi", "#!/bin/sh\n");
+
     server::LocationDirectiveConf loc;
     ASSERT_TRUE(loc.setPathPattern("/cgi-bin").isOk());
     ASSERT_TRUE(loc.setRootDir(root).isOk());

@@ -1,6 +1,9 @@
 #ifndef WEBSERV_SESSION_CONTEXT_HPP_
 #define WEBSERV_SESSION_CONTEXT_HPP_
 
+#include <ctime>
+#include <vector>
+
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
@@ -39,6 +42,19 @@ struct SessionContext
     bool should_close_connection;
     bool socket_watch_read;
     bool socket_watch_write;
+
+    // socket write を一時停止して body fd の read を待つ（busy loop 回避）
+    bool pause_write_until_body_ready;
+
+    // SendResponseState が監視する body の fd（CGI stdout など）
+    int body_watch_fd;
+    bool body_watch_read;
+
+    // CGI: headers 完了後、最初の body byte を待つ間の情報
+    int cgi_stdout_fd_for_response;
+    std::vector<utils::Byte> cgi_prefetched_body;
+    bool waiting_cgi_first_body;
+    time_t waiting_cgi_first_body_start;
 
     bool in_read_backpressure;
     bool in_write_backpressure;

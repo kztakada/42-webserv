@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <ctime>
 #include <map>
 #include <sstream>
 #include <vector>
@@ -144,18 +145,44 @@ Result<void> SessionCgiHandler::handleCgiError_(
     HttpSession& session, CgiSession& cgi, const std::string& message)
 {
     SessionContext& ctx = session.getContext();
-    if (ctx.pending_state != NULL)
-        return Result<void>();
     if (dynamic_cast<CloseWaitState*>(ctx.current_state))
         return Result<void>();
-    if (!dynamic_cast<ExecuteCgiState*>(ctx.current_state))
+
+    bool can_handle =
+        (dynamic_cast<ExecuteCgiState*>(ctx.current_state) != NULL);
+    if (!can_handle)
+    {
+        // headers 完了後に body が来ないまま timeout したケースを拾う。
+        // この場合は response_writer が未作成（ヘッダ未送出）なので 504
+        // にできる。
+        if (dynamic_cast<SendResponseState*>(ctx.current_state) != NULL &&
+            ctx.response_writer == NULL && ctx.cgi_stdout_fd_for_response >= 0)
+        {
+            can_handle = true;
+        }
+    }
+    if (!can_handle)
         return Result<void>();
 
     utils::Log::error("SessionCgiHandler", "CGI error:", message);
 
+    // CgiSession 側が stdout を保持していれば回収、すでに親へ移譲済みなら -1
     const int stdout_fd = cgi.releaseStdoutFd();
     if (stdout_fd >= 0)
         ::close(stdout_fd);
+
+    // headers 完了後に stdout を親が保持している場合は、ここで解除・破棄する。
+    if (ctx.cgi_stdout_fd_for_response >= 0)
+    {
+        session.clearBodyWatch_();
+        controller_.unregisterFd(ctx.cgi_stdout_fd_for_response);
+        ::close(ctx.cgi_stdout_fd_for_response);
+        ctx.cgi_stdout_fd_for_response = -1;
+    }
+    ctx.cgi_prefetched_body.clear();
+    ctx.waiting_cgi_first_body = false;
+    ctx.waiting_cgi_first_body_start = 0;
+    ctx.pause_write_until_body_ready = false;
 
     if (ctx.active_cgi_session == &cgi)
     {
@@ -243,13 +270,37 @@ Result<void> SessionCgiHandler::handleCgiHeadersReadyNormal_(
     if (stdout_fd < 0)
         return Result<void>(ERROR, "missing cgi stdout fd");
 
-    BodySource* bs = new PrefetchedFdBodySource(stdout_fd, prefetched);
-    session.installBodySourceAndWriter_(utils::OwnedPtr<BodySource>(bs));
+    // まずは stdout を watch し、最初の body byte
+    // が来るまでヘッダ送出を遅延する。 これにより「ヘッダ確定後に body
+    // が来ないまま timeout」した場合に 504 を返せる。
+    ctx.cgi_stdout_fd_for_response = stdout_fd;
+    ctx.cgi_prefetched_body = prefetched;
+    ctx.waiting_cgi_first_body = prefetched.empty();
+    ctx.waiting_cgi_first_body_start = std::time(NULL);
+    ctx.pause_write_until_body_ready = true;
+
+    Result<void> w = session.setBodyWatchFd_(stdout_fd);
+    if (w.isError())
+        return w;
+
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();
 
-    if (ctx.active_cgi_session == &cgi)
-        ctx.active_cgi_session = NULL;
+    // すでに body を先読みしている場合は、ここで送信を開始してよい。
+    if (!ctx.waiting_cgi_first_body)
+    {
+        BodySource* bs = new PrefetchedFdBodySource(stdout_fd, prefetched);
+        session.installBodySourceAndWriter_(utils::OwnedPtr<BodySource>(bs));
+        ctx.cgi_stdout_fd_for_response = -1;
+        ctx.cgi_prefetched_body.clear();
+        ctx.pause_write_until_body_ready = false;
+
+        // ヘッダ＋先頭chunkを send_buffer に積んで write watch を有効化
+        if (ctx.response_writer != NULL)
+            (void)ctx.response_writer->pump(ctx.send_buffer);
+        (void)session.updateSocketWatches_();
+    }
+
     return Result<void>();
 }
 

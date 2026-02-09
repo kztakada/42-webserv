@@ -157,6 +157,13 @@ Result<const std::vector<FdEvent>&> EpollFdEventReactor::waitEvents(
         if (events[i].events & EPOLLOUT)
             triggered |= kWriteEventMask;
 
+        // EPOLLHUP は fd の EOF/切断を示すが、EPOLLIN/EPOLLOUT
+        // を伴わないことがある。 その場合でも Session 側で read()/write()
+        // を行って EOF を確定できるように、
+        // 監視しているイベント種別を発火させる。
+        if (events[i].events & EPOLLHUP)
+            triggered |= (watch->events & (kReadEventMask | kWriteEventMask));
+
         std::vector<FdEvent> fd_events =
             watch->makeFdEvents(triggered, is_opposite_close);
         for (size_t j = 0; j < fd_events.size(); ++j)

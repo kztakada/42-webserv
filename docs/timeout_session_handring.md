@@ -42,15 +42,25 @@
 
 ### `getNextTimeoutMs()` の返り値仕様
 
-- `-1`:
-	- タイムアウト対象のセッションが 1 つも無い（`timeout_seconds_ <= 0` のみ、または空）。
-	- `waitEvents(-1)` は無期限待機の意味（Reactor 実装側の仕様に従う）。
 - `0`:
 	- すでに期限切れのセッションが存在する（次の `handleTimeouts()` で即時処理したい）。
 	- `waitEvents(0)` により「待機せず、すぐループを進める」。
-- `> 0`:
-	- 最短の残り秒 `min_remaining_sec` を `min_remaining_sec * 1000` に変換した ms。
-	- `int` への変換に際し、上限を `INT_MAX` 相当に clamp する。
+
+実装上の補足（重要）:
+
+	- `FdSessionController::getNextTimeoutMs()` は **無期限待機を使わない**。
+		- タイムアウト対象のセッションが 1 つも無い場合でも `1000` を返す。
+		- タイムアウト対象がある場合でも、返り値は最大 `1000ms` に clamp される。
+		- 理由: `Server::start()` の `should_stop_` チェック直後にシグナルが届いた場合、`waitEvents()` が無期限にブロックすると shutdown できないため。
+
+したがって `getNextTimeoutMs()` の返り値は次の通り:
+
+- `0`:
+	- 期限切れ（`remaining <= 0`）のセッションが存在する。
+	- 次の `handleTimeouts()` で即時処理させたい。
+- `1..1000`:
+	- 最短の残り秒 `min_remaining_sec` を `min_remaining_sec * 1000` に変換し、`1000ms` を上限に clamp した値。
+	- タイムアウト対象のセッションが 1 つも無い場合も `1000`。
 
 計算の基準は次の通り:
 
@@ -99,17 +109,48 @@
 
 ### HttpSession
 
-- デフォルト: `kDefaultTimeoutSec = 5`
+- デフォルト: `kDefaultTimeoutSec = 10`
 - `handleEvent()` 冒頭で `updateLastActiveTime()` を実施
 	- read/write/error/timeout いずれのイベントでも「アクティブ」として扱う設計
 	- 実際にタイムアウトになったセッションは `handleTimeouts()` の走査時点で確定しているため、`kTimeoutEvent` で時刻更新されても問題にならない
 - `kTimeoutEvent` を受け取ったら、最小実装としてソケット shutdown し complete とする
 
+例外（CGI関連）:
+
+- CGI 実行中（`ExecuteCgiState`）は `HttpSession::isTimedOut()` が `false` を返し、HttpSession 自体のタイムアウトを抑制する
+	- ねらい: HttpSession timeout で CloseWait に落ちて無言 close するより、CGI 側 timeout/error を起点に `504/502` を返す
+- CGI headers は確定したが body が来るまでヘッダ送出を止めている間も同様に抑制する
+	- 条件: `SendResponseState` かつ `pause_write_until_body_ready == true`
+	- ねらい: 「ヘッダ後ハング」も CGI 側タイムアウトにより `504` へ差し替えられるようにする
+
 ### CgiSession
 
-- デフォルト: `kDefaultTimeoutSec = 5`
+- デフォルト: `kDefaultTimeoutSec = 10`
 - `handleEvent()` 冒頭で `updateLastActiveTime()` を実施
+	- 追加仕様: 親がいる場合は `parent_session_->updateLastActiveTime()` も実施し、親 HttpSession のアイドル計測も同時に進める
 - タイムアウト時は CGI プロセス/パイプをクリーンアップし、親（`HttpSession`）へ通知する設計
+	- `kTimeoutEvent` / `kErrorEvent` を受け取ったら、親がいる場合 `HttpSession::onCgiError()` を 1 回だけ通知してから `controller_.requestDelete(this)` する
+	- 通知メッセージは実装上 `"cgi session timeout"` / `"cgi session error"`
+
+削除（破棄）に関する補足:
+
+- 親（HttpSession）が存在する間は `CgiSession::isComplete()` が常に `false` になり、Controller の「dispatch後 self-complete 回収」では削除されない
+	- ねらい: CGI stdout を HttpSession 側がストリーミングしている間に CgiSession が勝手に complete 扱いにならないようにする
+	- 回収責務: 親がレスポンス送信完了時に `requestDelete(cgi_session)` する
+	- ただし timeout/error の場合は CgiSession 側から `requestDelete` する
+
+## Watch（fd監視）更新の注意
+
+`FdSessionController` の watch 管理には次の重要な性質がある:
+
+- `want_read == false` かつ `want_write == false` になった fd は、Controller が `unregisterFd(fd)` して **登録そのものが消える**
+	- その後に `updateWatch(fd, ...)` を呼ぶと `"fd not registered"` になる
+	- 監視を復帰させたい場合は `setWatch(fd, session, ...)` による再登録が必要
+
+この仕様を踏まえ、HttpSession の socket watch 更新は:
+
+- `updateWatch()` が失敗（未登録）した場合に `setWatch()` で再登録して復帰する
+	- 例: CGI body 待ち等で一時的に read/write を両方止めた後、write を再開してレスポンス送信するケース
 
 ## 実装上の注意（拡張するとき）
 

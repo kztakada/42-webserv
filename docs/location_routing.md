@@ -6,6 +6,12 @@
 本プロジェクトの設計上、**LocationRouting は「次に取るべきアクションの決定」と「必要情報の提供」**が責務です。
 ファイルの存在確認（`stat()`）や読み書き（`open/read/write`）などの FS アクセスの主体は Session 層です。
 
+例外（CGI）:
+
+- CGI 拡張子がマッチした場合に限り、`LocationRouting::decideAction_()` がスクリプト実体を `stat()` し、
+  - 不在/regular file でない場合は `404 Not Found`（`RESPOND_ERROR`）を確定させます。
+  - ねらい: 「スクリプト不在（404）」と「CGI実行時異常（502/504）」を区別するため。
+
 ---
 
 ## 1. 入口と前提
@@ -226,7 +232,8 @@ Session での典型フロー:
 
 ## 8. `RUN_CGI` と `CgiContext`
 
-`RUN_CGI` は、location の `cgi_extensions` と request path のマッチで選ばれます（FS は見ません）。
+`RUN_CGI` は、location の `cgi_extensions` と request path のマッチで候補になります。
+現行実装では、候補になった場合に **スクリプト実体を `stat()` で確認し**、不在/regular file でない場合は `404`（`RESPOND_ERROR`）になります。
 
 `getCgiContext()` が返す `CgiContext`:
 

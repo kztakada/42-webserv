@@ -1,5 +1,7 @@
 #include "server/http_processing_module/request_router/location_routing.hpp"
 
+#include <sys/stat.h>
+
 #include "utils/path.hpp"
 
 namespace server
@@ -419,6 +421,39 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
             request_ctx_.getRequestPath(), &exec, &ext, &end);
         if (end != std::string::npos)
         {
+            // script の実体がなければ 404（CGI
+            // 実行エラーではなくリソース未存在）
+            const std::string uri_path = request_ctx_.getRequestPath();
+            const std::string script_name = uri_path.substr(0, end);
+
+            std::string script_under_location =
+                location_->removePathPatternFromPath(script_name);
+            if (script_under_location.empty())
+            {
+                script_under_location = "/";
+            }
+            else if (script_under_location[0] != '/')
+            {
+                script_under_location = "/" + script_under_location;
+            }
+
+            Result<utils::path::PhysicalPath> script_physical =
+                utils::path::resolvePhysicalPathUnderRoot(
+                    location_->rootDir(), script_under_location, true);
+            if (script_physical.isError())
+            {
+                status_ = http::HttpStatus::BAD_REQUEST;
+                return applyErrorPageOrRespondError_();
+            }
+
+            struct stat st;
+            if (::stat(script_physical.unwrap().str().c_str(), &st) != 0 ||
+                !S_ISREG(st.st_mode))
+            {
+                status_ = http::HttpStatus::NOT_FOUND;
+                return applyErrorPageOrRespondError_();
+            }
+
             next_action_ = RUN_CGI;
             return Result<void>();
         }

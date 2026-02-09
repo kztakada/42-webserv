@@ -1,3 +1,4 @@
+#include <ctime>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,6 +17,48 @@ using namespace utils::result;
 Result<void> SendResponseState::handleEvent(
     HttpSession& context, const FdEvent& event)
 {
+    // CGI stdout (body fd) の read イベント: body が来たら pump して socket
+    // へ流す
+    if (event.type == kReadEvent && context.context_.body_watch_fd >= 0 &&
+        event.fd == context.context_.body_watch_fd)
+    {
+        // headers 完了後、最初の body を待っている場合はここで送信を開始する
+        if (context.context_.response_writer == NULL &&
+            context.context_.cgi_stdout_fd_for_response == event.fd)
+        {
+            // 「待ち」状態を解除し、CGI レスポンスの送信を開始する
+            BodySource* bs = new PrefetchedFdBodySource(
+                context.context_.cgi_stdout_fd_for_response,
+                context.context_.cgi_prefetched_body);
+            context.installBodySourceAndWriter_(
+                utils::OwnedPtr<BodySource>(bs));
+            context.context_.cgi_stdout_fd_for_response = -1;
+            context.context_.cgi_prefetched_body.clear();
+            context.context_.waiting_cgi_first_body = false;
+            context.context_.waiting_cgi_first_body_start = 0;
+        }
+
+        context.context_.pause_write_until_body_ready = false;
+
+        // send_buffer が空なら pump して積む
+        if (context.context_.send_buffer.size() == 0 &&
+            context.context_.response_writer != NULL &&
+            !context.context_.response.isComplete())
+        {
+            (void)context.context_.response_writer->pump(
+                context.context_.send_buffer);
+            // pump の結果で send_buffer が空のままなら write を止める
+            if (context.context_.send_buffer.size() == 0 &&
+                !context.context_.response.isComplete())
+            {
+                context.context_.pause_write_until_body_ready = true;
+            }
+        }
+
+        (void)context.updateSocketWatches_();
+        return Result<void>();
+    }
+
     // クライアント切断処理
     if (event.is_opposite_close &&
         event.fd == context.context_.socket_fd.getFd())
@@ -40,6 +83,10 @@ Result<void> SendResponseState::handleEvent(
     if (event.type != kWriteEvent)
         return Result<void>();
 
+    // body ready を待っている間は write を処理しない
+    if (context.context_.pause_write_until_body_ready)
+        return Result<void>();
+
     if (context.context_.response_writer == NULL)
     {
         context.changeState(new CloseWaitState());
@@ -61,6 +108,16 @@ Result<void> SendResponseState::handleEvent(
         const HttpResponseWriter::PumpResult pr = pumped.unwrap();
         if (pr.should_close_connection)
             context.context_.should_close_connection = true;
+
+        // pump しても何も積めない場合（典型: CGI body が would-block）は
+        // write watch を止め、body fd の read を待つ。
+        if (context.context_.send_buffer.size() == 0 &&
+            !context.context_.response.isComplete())
+        {
+            context.context_.pause_write_until_body_ready = true;
+            (void)context.updateSocketWatches_();
+            return Result<void>();
+        }
     }
 
     // flush
@@ -140,12 +197,22 @@ Result<void> SendResponseState::handleEvent(
             delete context.context_.response_writer;
             context.context_.response_writer = NULL;
         }
+
+        // CGI が紐づいていればここで確実に回収する（zombie/リーク防止）
+        if (context.getContext().active_cgi_session != NULL)
+        {
+            context.controller_.requestDelete(
+                context.getContext().active_cgi_session);
+            context.getContext().active_cgi_session = NULL;
+        }
         // context_.body_source は writer に渡しただけなので、ここで破棄
+        context.clearBodyWatch_();
         context.context_.body_source.reset(NULL);
 
         context.context_.response.reset();
         context.getContext().request_handler.reset();
         context.context_.request = http::HttpRequest();
+        context.context_.pause_write_until_body_ready = false;
 
         if (context.context_.should_close_connection)
         {
@@ -184,7 +251,16 @@ void SendResponseState::getWatchFlags(
     }
     if (want_write)
     {
-        *want_write = true;
+        if (session.context_.pause_write_until_body_ready)
+        {
+            *want_write = false;
+        }
+        else
+        {
+            // send_buffer が空でも、ヘッダ送出/処理を進めるために write
+            // を有効化する。
+            *want_write = (session.context_.response_writer != NULL);
+        }
     }
 }
 

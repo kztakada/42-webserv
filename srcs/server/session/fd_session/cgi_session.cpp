@@ -118,6 +118,12 @@ void CgiSession::markCountedAsActiveCgi()
 
 bool CgiSession::isComplete() const
 {
+    // 親(HttpSession)が CGI の stdout をストリーミングしている間は、
+    // この CgiSession を self-complete させない。
+    // （親がレスポンス完了時に明示的に requestDelete する）
+    if (parent_session_ != NULL)
+        return false;
+
     // headers 完了後は stdout を親へ移譲する想定。
     // ここでは最低限、stdin が閉じて stderr も EOF になったら complete 扱い。
     if (!headers_complete_)
@@ -157,8 +163,7 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
                                                         : "cgi session error";
 
         // 親側は CGI エラーとして扱う想定
-        if (!headers_complete_ && parent_session_ != NULL &&
-            !error_notified_to_parent_)
+        if (parent_session_ != NULL && !error_notified_to_parent_)
         {
             error_notified_to_parent_ = true;
             (void)parent_session_->onCgiError(*this, msg);
@@ -179,8 +184,7 @@ Result<void> CgiSession::handleEvent(const FdEvent& event)
 
     if (r.isError())
     {
-        if (!headers_complete_ && parent_session_ != NULL &&
-            !error_notified_to_parent_)
+        if (parent_session_ != NULL && !error_notified_to_parent_)
         {
             error_notified_to_parent_ = true;
             (void)parent_session_->onCgiError(*this, r.getErrorMessage());

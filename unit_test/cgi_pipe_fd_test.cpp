@@ -1,6 +1,7 @@
 #include "server/session/fd/cgi_pipe/cgi_pipe_fd.hpp"
 
 #include <gtest/gtest.h>
+#include <sys/select.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -64,6 +65,29 @@ std::string readAll_(int fd)
         }
         if (errno == EINTR)
         {
+            continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            // non-blocking fd: readability を待って再試行
+            fd_set rfds;
+            FD_ZERO(&rfds);
+            FD_SET(fd, &rfds);
+            struct timeval tv;
+            tv.tv_sec = 1;
+            tv.tv_usec = 0;
+            int r = ::select(fd + 1, &rfds, NULL, NULL, &tv);
+            if (r < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                break;
+            }
+            if (r == 0)
+            {
+                // timeout: child がまだ出力していない可能性があるので継続
+                continue;
+            }
             continue;
         }
         // unexpected read error

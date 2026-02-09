@@ -211,6 +211,23 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
   r=$(curl -sS -i "http://127.0.0.1:18084/cgi_bash/hello.js")
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "const fs"
+
+  # --- CGI error/timeout cases ---
+  # 1) headers 確定前の timeout -> 504
+  r=$(curl -sS -i --max-time 15 "http://127.0.0.1:18084/cgi_bash/timeout_before_headers.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 504"
+
+  # 2) headers 確定後の timeout -> 504
+  r=$(curl -sS -i --max-time 15 "http://127.0.0.1:18084/cgi_bash/timeout_after_headers.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 504"
+
+  # 3) CGI 異常終了 -> 502
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_bash/abnormal_exit.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 502"
+
+  # 4) 存在しない CGI script -> 404
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_bash/no_such_script_abcdef.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 404"
 '
 
 # --- 05_upload_store ---

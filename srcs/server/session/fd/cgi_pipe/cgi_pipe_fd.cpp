@@ -1,5 +1,6 @@
 #include "cgi_pipe_fd.hpp"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -42,6 +43,18 @@ std::string CgiPipeFd::GetResourceType() const { return "CgiPipeFd"; }
 
 namespace
 {
+
+Result<void> setNonBlocking_(int fd)
+{
+    if (fd < 0)
+        return Result<void>(ERROR, "invalid fd");
+    const int flags = ::fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return Result<void>(ERROR, "fcntl(F_GETFL) failed");
+    if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+        return Result<void>(ERROR, "fcntl(F_SETFL) failed");
+    return Result<void>();
+}
 
 void closeIfValid_(int& fd)
 {
@@ -146,6 +159,34 @@ Result<CgiSpawnResult> CgiPipeFd::Execute(const std::string& script_path,
     closeIfValid_(stdin_pipe[0]);
     closeIfValid_(stdout_pipe[1]);
     closeIfValid_(stderr_pipe[1]);
+
+    // 親側の fd は non-blocking にする（Session 実装が would-block
+    // を前提にしている）
+    Result<void> nb;
+    nb = setNonBlocking_(stdin_pipe[1]);
+    if (nb.isError())
+    {
+        closeIfValid_(stdin_pipe[1]);
+        closeIfValid_(stdout_pipe[0]);
+        closeIfValid_(stderr_pipe[0]);
+        return Result<CgiSpawnResult>(ERROR, nb.getErrorMessage());
+    }
+    nb = setNonBlocking_(stdout_pipe[0]);
+    if (nb.isError())
+    {
+        closeIfValid_(stdin_pipe[1]);
+        closeIfValid_(stdout_pipe[0]);
+        closeIfValid_(stderr_pipe[0]);
+        return Result<CgiSpawnResult>(ERROR, nb.getErrorMessage());
+    }
+    nb = setNonBlocking_(stderr_pipe[0]);
+    if (nb.isError())
+    {
+        closeIfValid_(stdin_pipe[1]);
+        closeIfValid_(stdout_pipe[0]);
+        closeIfValid_(stderr_pipe[0]);
+        return Result<CgiSpawnResult>(ERROR, nb.getErrorMessage());
+    }
 
     CgiSpawnResult spawned;
     spawned.pid = pid;

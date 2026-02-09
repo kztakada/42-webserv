@@ -148,6 +148,8 @@ void CgiSession::getInitialWatchSpecs(
 Result<void> CgiSession::handleEvent(const FdEvent& event)
 {
     updateLastActiveTime();
+    if (parent_session_ != NULL)
+        parent_session_->updateLastActiveTime();
 
     if (event.type == kTimeoutEvent || event.type == kErrorEvent)
     {

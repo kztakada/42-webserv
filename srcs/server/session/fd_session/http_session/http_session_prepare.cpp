@@ -29,9 +29,6 @@ Result<void> HttpSession::prepareResponseOrCgi_()
 
 Result<void> HttpSession::consumeRecvBufferWithoutRead_()
 {
-    if (context_.pending_state != NULL)
-        return Result<void>();
-
     const bool was_parse_complete = context_.request.isParseComplete();
 
     for (;;)

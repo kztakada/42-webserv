@@ -29,7 +29,7 @@ class HttpSession;
 class CgiSession : public FdSession
 {
    public:
-    static const long kDefaultTimeoutSec = 5;
+    static const long kDefaultTimeoutSec = 10;
 
     CgiSession(pid_t pid, int in_fd, int out_fd, int err_fd,
         int request_body_fd, HttpSession* parent,

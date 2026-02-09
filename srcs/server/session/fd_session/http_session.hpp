@@ -48,7 +48,7 @@ class ExecuteCgiAction;
 class HttpSession : public FdSession
 {
    public:
-    static const long kDefaultTimeoutSec = 5;
+    static const long kDefaultTimeoutSec = 10;
     static const int kMaxInternalRedirects = 5;
     static const size_t kMaxRecvBufferBytes = 64 * 1024;
 

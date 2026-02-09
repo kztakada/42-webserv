@@ -71,6 +71,12 @@ class HttpRequest
     bool hasParseError() const;
     HttpStatus getParseErrorStatus() const;
 
+    // ペイロードが制限を超えた場合、HTTPとしては正しい形でも
+    // アプリケーションとしては 413 を返す必要がある。
+    // keep-alive を維持するため、パーサはボディを最後まで読み飛ばして
+    // ストリーム同期を保つ（phase_ は kComplete になり得る）。
+    bool isPayloadTooLarge() const;
+
     // Getter (RFC準拠の情報のみ)
     HttpMethod getMethod() const;
     const std::string& getMethodString() const;
@@ -140,6 +146,11 @@ class HttpRequest
     // 処理済み文字数
     size_t cursor_;
 
+    // request-line 前の先頭空行(CRLF)を許容する回数を管理する。
+    // RFC 7230 Section 3.5 の "at least one empty line"
+    // に合わせ、1回までは無視。 連続した空行は不正入力として 400 にする。
+    size_t leading_empty_lines_;
+
     // リクエストライン
     HttpMethod method_;
     std::string method_string_;
@@ -166,6 +177,10 @@ class HttpRequest
     unsigned long chunk_bytes_remaining_;
 
     bool should_keep_alive_;
+
+    // ボディが limits_.max_body_bytes を超えた場合に立つ。
+    // parse エラーとして扱わず、残りを読み飛ばして complete にする。
+    bool payload_too_large_;
 
     // 防御的制限（デフォルト有効）
     Limits limits_;

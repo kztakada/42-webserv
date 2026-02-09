@@ -17,13 +17,22 @@ Result<void> SendErrorAction::execute(HttpSession& session)
         return bo;
     session.context_.response.setHttpVersion(
         session.context_.request.getHttpVersion());
+
+    // 受信途中/パースエラーのときは、次にどこから再開できるか（ストリーム同期）
+    // が保証できないため close する。
+    // 一方で、すでにリクエストが確定している場合の 5xx/4xx は
+    // keep-alive を維持しても問題ない（close が必要な場合は encoder
+    // が決める）。
+    const bool should_close = session.context_.request.hasParseError() ||
+                              !session.context_.request.isParseComplete();
+    if (should_close)
+    {
+        (void)session.context_.response.setHeader("Connection", "close");
+    }
     session.installBodySourceAndWriter_(out.body_source);
 
     session.context_.should_close_connection =
-        session.context_.should_close_connection ||
-        session.context_.peer_closed || out.should_close_connection ||
-        !session.context_.request.shouldKeepAlive() ||
-        session.getContext().request_handler.shouldCloseConnection();
+        session.context_.should_close_connection || should_close;
     session.changeState(new SendResponseState());
     (void)session.updateSocketWatches_();
     return Result<void>();

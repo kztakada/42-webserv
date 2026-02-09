@@ -287,6 +287,32 @@ TEST(HttpRequest, MissingHostInHttp11IsBadRequest)
     EXPECT_EQ(http::HttpStatus::BAD_REQUEST, req.getParseErrorStatus());
 }
 
+// RFC 7230 Section 3.5: request-line の前の空行は少なくとも1回は無視できる
+TEST(HttpRequest, AllowsSingleLeadingEmptyLineBeforeRequestLine)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf =
+        toBytes("\r\nGET / HTTP/1.1\r\nHost: example.com\r\n\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+
+    EXPECT_TRUE(r.isOk());
+    EXPECT_EQ(buf.size(), r.unwrap());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.hasParseError());
+}
+
+// 空行だけ（CRLFを2回）を送ってヘッダ終端を作るのはリクエストとして不正
+TEST(HttpRequest, RejectsTwoLeadingEmptyLinesAsBadRequest)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes("\r\n\r\n");
+    utils::result::Result<size_t> r = req.parse(buf);
+
+    EXPECT_FALSE(r.isOk());
+    EXPECT_TRUE(req.hasParseError());
+    EXPECT_EQ(http::HttpStatus::BAD_REQUEST, req.getParseErrorStatus());
+}
+
 // RFC 9110: field-name は token (tchar) のみ許可される
 TEST(HttpRequest, RejectsInvalidHeaderFieldNameToken)
 {
@@ -478,7 +504,7 @@ TEST(HttpRequest, RejectsTransferEncodingChunkedNotLast)
     EXPECT_EQ(http::HttpStatus::BAD_REQUEST, req.getParseErrorStatus());
 }
 
-TEST(HttpRequest, RejectsTooLargeBodyByContentLength)
+TEST(HttpRequest, DrainsTooLargeBodyByContentLengthAndMarksPayloadTooLarge)
 {
     http::HttpRequest req;
     http::HttpRequest::Limits limits = req.getLimits();
@@ -490,12 +516,14 @@ TEST(HttpRequest, RejectsTooLargeBodyByContentLength)
         "abcde");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_FALSE(r.isOk());
-    EXPECT_TRUE(req.hasParseError());
-    EXPECT_EQ(http::HttpStatus::PAYLOAD_TOO_LARGE, req.getParseErrorStatus());
+    EXPECT_TRUE(r.isOk());
+    EXPECT_EQ(buf.size(), r.unwrap());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.hasParseError());
+    EXPECT_TRUE(req.isPayloadTooLarge());
 }
 
-TEST(HttpRequest, RejectsTooLargeBodyByChunked)
+TEST(HttpRequest, DrainsTooLargeBodyByChunkedAndMarksPayloadTooLarge)
 {
     http::HttpRequest req;
     http::HttpRequest::Limits limits = req.getLimits();
@@ -510,9 +538,11 @@ TEST(HttpRequest, RejectsTooLargeBodyByChunked)
         "0\r\n\r\n");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_FALSE(r.isOk());
-    EXPECT_TRUE(req.hasParseError());
-    EXPECT_EQ(http::HttpStatus::PAYLOAD_TOO_LARGE, req.getParseErrorStatus());
+    EXPECT_TRUE(r.isOk());
+    EXPECT_EQ(buf.size(), r.unwrap());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.hasParseError());
+    EXPECT_TRUE(req.isPayloadTooLarge());
 }
 
 // gzipなどのcodingは非対応（501）

@@ -116,9 +116,16 @@ TEST(HttpRequestHandler, RejectsBodyOverLocationMaxBodyBytes)
     recv.append(raw);
 
     Result<void> r = handler.consumeFromRecvBuffer(recv);
-    ASSERT_TRUE(r.isError());
+    ASSERT_TRUE(r.isOk()) << r.getErrorMessage();
 
-    EXPECT_TRUE(request.hasParseError());
-    EXPECT_EQ(
-        request.getParseErrorStatus(), http::HttpStatus::PAYLOAD_TOO_LARGE);
+    EXPECT_TRUE(request.isParseComplete());
+    EXPECT_FALSE(request.hasParseError());
+    EXPECT_TRUE(request.isPayloadTooLarge());
+    EXPECT_EQ(static_cast<size_t>(3), request.getDecodedBodyBytes());
+    EXPECT_EQ(static_cast<size_t>(0), handler.bodyStore().size());
+
+    // payload-too-large の drain 中は BodyStore に書き込まないので、
+    // 一時ファイルが作られず openForRead() は失敗する。
+    Result<int> fd = handler.bodyStore().openForRead();
+    EXPECT_TRUE(fd.isError());
 }

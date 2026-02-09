@@ -57,6 +57,20 @@ Result<void> HttpProcessingModule::buildErrorOutput(SessionContext& context,
 Result<void> HttpProcessingModule::buildProcessorOutputOrServerError(
     SessionContext& context, RequestProcessor::Output* out)
 {
+    // ボディが大きすぎる場合は、パーサがストリーム同期のために最後まで
+    // 読み飛ばして complete にしている。
+    // ここで 413 を返す（通常は keep-alive 維持可能）。
+    if (context.request.isPayloadTooLarge())
+    {
+        Result<void> bo =
+            buildErrorOutput(context, http::HttpStatus::PAYLOAD_TOO_LARGE, out);
+        if (bo.isError())
+            return bo;
+        context.response.setHttpVersion(context.request.getHttpVersion());
+        out->should_close_connection = false;
+        return Result<void>();
+    }
+
     Result<RequestProcessor::Output> pr =
         processor.process(context.request, context.socket_fd.getServerIp(),
             context.socket_fd.getServerPort(), context.response);
@@ -82,7 +96,9 @@ Result<void> HttpProcessingModule::buildProcessorOutputOrServerError(
         return bo;
 
     context.response.setHttpVersion(context.request.getHttpVersion());
-    out->should_close_connection = true;
+    // 内部エラー(5xx)は、プロトコル上は keep-alive を維持できる。
+    // close が必要な場合（HTTP/1.0 close-delimited 等）は Encoder 側が決める。
+    out->should_close_connection = false;
     return Result<void>();
 }
 

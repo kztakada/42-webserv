@@ -121,6 +121,7 @@ HttpRequest::HttpRequest()
     : phase_(kRequestLine),
       parse_error_status_(HttpStatus::OK),
       cursor_(0),
+      leading_empty_lines_(0),
       method_(HttpMethod::UNKNOWN),
       method_string_(),
       path_(),
@@ -135,6 +136,7 @@ HttpRequest::HttpRequest()
       chunk_phase_(kChunkSizeLine),
       chunk_bytes_remaining_(0),
       should_keep_alive_(true),
+      payload_too_large_(false),
       limits_(),
       header_bytes_parsed_(0),
       header_count_(0)
@@ -145,6 +147,7 @@ HttpRequest::HttpRequest(const HttpRequest& rhs)
     : phase_(rhs.phase_),
       parse_error_status_(rhs.parse_error_status_),
       cursor_(rhs.cursor_),
+      leading_empty_lines_(rhs.leading_empty_lines_),
       method_(rhs.method_),
       method_string_(rhs.method_string_),
       path_(rhs.path_),
@@ -159,6 +162,7 @@ HttpRequest::HttpRequest(const HttpRequest& rhs)
       chunk_phase_(rhs.chunk_phase_),
       chunk_bytes_remaining_(rhs.chunk_bytes_remaining_),
       should_keep_alive_(rhs.should_keep_alive_),
+      payload_too_large_(rhs.payload_too_large_),
       limits_(rhs.limits_),
       header_bytes_parsed_(rhs.header_bytes_parsed_),
       header_count_(rhs.header_count_)
@@ -182,10 +186,12 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& rhs)
         body_framing_ = rhs.body_framing_;
         content_length_remaining_ = rhs.content_length_remaining_;
         cursor_ = rhs.cursor_;
+        leading_empty_lines_ = rhs.leading_empty_lines_;
         chunk_phase_ = rhs.chunk_phase_;
         chunk_bytes_remaining_ = rhs.chunk_bytes_remaining_;
         decoded_body_bytes_ = rhs.decoded_body_bytes_;
         should_keep_alive_ = rhs.should_keep_alive_;
+        payload_too_large_ = rhs.payload_too_large_;
 
         limits_ = rhs.limits_;
         header_bytes_parsed_ = rhs.header_bytes_parsed_;
@@ -199,6 +205,8 @@ HttpRequest::~HttpRequest() {}
 bool HttpRequest::isParseComplete() const { return phase_ == kComplete; }
 
 bool HttpRequest::hasParseError() const { return phase_ == kError; }
+
+bool HttpRequest::isPayloadTooLarge() const { return payload_too_large_; }
 
 HttpStatus HttpRequest::getParseErrorStatus() const
 {
@@ -718,8 +726,10 @@ Result<void> HttpRequest::validateHeaders(bool skip_body_size_check)
                 content_length_remaining_ >
                     static_cast<unsigned long>(limits_.max_body_bytes))
             {
-                parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
-                return Result<void>(ERROR, "body too large");
+                // 413 を返す必要があるが、keep-alive を維持するには
+                // ストリーム同期のためボディを最後まで読み飛ばす必要がある。
+                // ここでは parse error にせず、フラグを立てて drain する。
+                payload_too_large_ = true;
             }
         }
         body_framing_ =
@@ -833,15 +843,13 @@ Result<size_t> HttpRequest::parseChunkedBody(
                     ? available
                     : static_cast<size_t>(chunk_bytes_remaining_);
 
-            if (wouldExceedLimit(
-                    decoded_body_bytes_, take, limits_.max_body_bytes))
+            if (!payload_too_large_ && wouldExceedLimit(decoded_body_bytes_,
+                                           take, limits_.max_body_bytes))
             {
-                phase_ = kError;
-                parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
-                return Result<size_t>(ERROR, "body too large");
+                payload_too_large_ = true;
             }
 
-            if (sink != NULL)
+            if (sink != NULL && !payload_too_large_)
             {
                 Result<void> w = sink->write(data + cursor_, take);
                 if (!w.isOk())
@@ -851,7 +859,11 @@ Result<size_t> HttpRequest::parseChunkedBody(
                     return Result<size_t>(ERROR, w.getErrorMessage());
                 }
             }
-            decoded_body_bytes_ += take;
+
+            if (!payload_too_large_)
+                decoded_body_bytes_ += take;
+            else if (limits_.max_body_bytes != 0)
+                decoded_body_bytes_ = limits_.max_body_bytes;
 
             cursor_ += take;
             chunk_bytes_remaining_ -= take;
@@ -994,6 +1006,24 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                 break;  // データ不足
             }
 
+            // telnet 等で先頭に空行(CRLF)が入ることがある。
+            // RFC 7230 Section 3.5: recipient は "at least one empty line"
+            // を無視できる。
+            // ただし連続した空行を無制限に許容すると、クライアントが空行だけを
+            // 送信し続けた場合にいつまでも応答できないため、1回だけ無視する。
+            if (line == HttpSyntax::kCrlf)
+            {
+                leading_empty_lines_ += 1;
+                if (leading_empty_lines_ <= 1)
+                    continue;
+                phase_ = kError;
+                parse_error_status_ = HttpStatus::BAD_REQUEST;
+                return Result<size_t>(ERROR, "empty request");
+            }
+
+            // request-line が始まった時点でカウンタは不要
+            leading_empty_lines_ = 0;
+
             if (line.size() >= 2 && wouldExceedLimit(0, line.size() - 2,
                                         limits_.max_request_line_length))
             {
@@ -1120,15 +1150,13 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                         ? available
                         : static_cast<size_t>(content_length_remaining_);
 
-                if (wouldExceedLimit(
-                        decoded_body_bytes_, take, limits_.max_body_bytes))
+                if (!payload_too_large_ && wouldExceedLimit(decoded_body_bytes_,
+                                               take, limits_.max_body_bytes))
                 {
-                    phase_ = kError;
-                    parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
-                    return Result<size_t>(ERROR, "body too large");
+                    payload_too_large_ = true;
                 }
 
-                if (sink != NULL)
+                if (sink != NULL && !payload_too_large_)
                 {
                     Result<void> w = sink->write(data + cursor_, take);
                     if (!w.isOk())
@@ -1138,7 +1166,11 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                         return Result<size_t>(ERROR, w.getErrorMessage());
                     }
                 }
-                decoded_body_bytes_ += take;
+
+                if (!payload_too_large_)
+                    decoded_body_bytes_ += take;
+                else if (limits_.max_body_bytes != 0)
+                    decoded_body_bytes_ = limits_.max_body_bytes;
                 cursor_ += take;
                 content_length_remaining_ -= static_cast<unsigned long>(take);
 
@@ -1155,15 +1187,14 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                 if (available == 0)
                     break;
 
-                if (wouldExceedLimit(
+                if (!payload_too_large_ &&
+                    wouldExceedLimit(
                         decoded_body_bytes_, available, limits_.max_body_bytes))
                 {
-                    phase_ = kError;
-                    parse_error_status_ = HttpStatus::PAYLOAD_TOO_LARGE;
-                    return Result<size_t>(ERROR, "body too large");
+                    payload_too_large_ = true;
                 }
 
-                if (sink != NULL)
+                if (sink != NULL && !payload_too_large_)
                 {
                     Result<void> w = sink->write(data + cursor_, available);
                     if (!w.isOk())
@@ -1173,7 +1204,11 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                         return Result<size_t>(ERROR, w.getErrorMessage());
                     }
                 }
-                decoded_body_bytes_ += available;
+
+                if (!payload_too_large_)
+                    decoded_body_bytes_ += available;
+                else if (limits_.max_body_bytes != 0)
+                    decoded_body_bytes_ = limits_.max_body_bytes;
                 cursor_ = len;
                 break;
             }

@@ -164,6 +164,9 @@ Result<void> SendResponseState::handleEvent(
 
         // Keep-Alive: 次のリクエストへ
         context.changeState(new RecvRequestState());
+        // pending_state を参照して watch 仕様が決まるので、ここで read watch
+        // を復帰させる。
+        (void)context.updateSocketWatches_();
         // バッファに残っているデータを処理
         return context.consumeRecvBufferWithoutRead_();
     }

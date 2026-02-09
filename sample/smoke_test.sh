@@ -395,6 +395,12 @@ run_sample sample/07_delete/webserv.conf bash -lc '
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
   test -f "$f_protected"
 '
+echo "07 sample smoke checks passed."
+# --- 09_keep_alive ---
+run_sample sample/09_keep_alive/webserv.conf bash -lc '
+  set -euo pipefail
+  python3 sample/09_keep_alive/test_keep_alive.py
+'
 
 echo "All sample smoke checks passed."
 # --- 08_signal_test ---

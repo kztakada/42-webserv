@@ -485,6 +485,13 @@ Result<void> HttpRequest::parseMethod(const std::string& method)
     }
     method_string_ = method;
     method_ = HttpMethod::fromString(method);
+    // 実装してないメソッドはNOT IMPLEMENTED
+    if (method_ != HttpMethod::GET && method_ != HttpMethod::DELETE &&
+        method_ != HttpMethod::POST)
+    {
+        parse_error_status_ = HttpStatus::NOT_IMPLEMENTED;
+        return Result<void>(ERROR, "not implemented method");
+    }
     return Result<void>();
 }
 

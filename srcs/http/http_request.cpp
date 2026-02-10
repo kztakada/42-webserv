@@ -100,6 +100,90 @@ static bool parseUnsignedLongStrict(const std::string& s, unsigned long* out)
     return true;
 }
 
+static std::string trimOws_(const std::string& s)
+{
+    size_t start = 0;
+    while (start < s.size() && isLws(s[start]))
+        ++start;
+    size_t end = s.size();
+    while (end > start && isLws(s[end - 1]))
+        --end;
+    return s.substr(start, end - start);
+}
+
+static bool isToken_(const std::string& s)
+{
+    if (s.empty())
+        return false;
+    for (size_t i = 0; i < s.size(); ++i)
+    {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (!isTchar(c))
+            return false;
+    }
+    return true;
+}
+
+static bool isQuotedString_(const std::string& s)
+{
+    // Minimal quoted-string validation for chunk-ext-val.
+    // Reject CR/LF and unescaped '"'.
+    if (s.size() < 2 || s[0] != '"' || s[s.size() - 1] != '"')
+        return false;
+    for (size_t i = 1; i + 1 < s.size(); ++i)
+    {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c == '\r' || c == '\n')
+            return false;
+        if (c == '"')
+        {
+            // Allow escaped quote only.
+            if (i == 0 || s[i - 1] != '\\')
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool validateChunkExtensionsStrict_(const std::string& ext_part)
+{
+    // RFC 9112: chunk-ext = *( OWS ";" OWS chunk-ext-name [ OWS "=" OWS
+    // chunk-ext-val ] ) We parse the portion after the first ';' (may contain
+    // further ';').
+    std::string rest = ext_part;
+
+    // Split by ';' and validate each extension.
+    while (true)
+    {
+        std::string::size_type semi = rest.find(';');
+        const std::string seg_raw =
+            (semi == std::string::npos) ? rest : rest.substr(0, semi);
+        std::string seg = trimOws_(seg_raw);
+        if (seg.empty())
+            return false;
+
+        std::string::size_type eq = seg.find('=');
+        std::string name =
+            (eq == std::string::npos) ? seg : trimOws_(seg.substr(0, eq));
+        if (!isToken_(name))
+            return false;
+
+        if (eq != std::string::npos)
+        {
+            std::string val = trimOws_(seg.substr(eq + 1));
+            if (val.empty())
+                return false;
+            if (!isToken_(val) && !isQuotedString_(val))
+                return false;
+        }
+
+        if (semi == std::string::npos)
+            break;
+        rest = rest.substr(semi + 1);
+    }
+    return true;
+}
+
 static bool wouldExceedLimit(size_t already, size_t add, size_t limit)
 {
     if (limit == 0)
@@ -783,6 +867,16 @@ Result<size_t> HttpRequest::parseChunkedBody(
             // chunk-ext は今回無視する（; 以降を捨てる）
             std::string s = line.substr(0, line.size() - 2);
             std::string::size_type semi = s.find(';');
+            if (semi != std::string::npos)
+            {
+                const std::string ext_part = s.substr(semi + 1);
+                if (!validateChunkExtensionsStrict_(ext_part))
+                {
+                    phase_ = kError;
+                    parse_error_status_ = HttpStatus::BAD_REQUEST;
+                    return Result<size_t>(ERROR, "invalid chunk extension");
+                }
+            }
             std::string size_str =
                 (semi == std::string::npos) ? s : s.substr(0, semi);
             size_str = trimOws(size_str);

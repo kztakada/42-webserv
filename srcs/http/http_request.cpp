@@ -400,6 +400,21 @@ std::string HttpRequest::extractLine(const utils::Byte* data, size_t len)
     return std::string();
 }
 
+static bool containsBareLf_(const utils::Byte* data, size_t start, size_t len)
+{
+    if (data == NULL)
+        return false;
+    for (size_t i = start; i < len; ++i)
+    {
+        if (data[i] == '\n')
+        {
+            if (i == 0 || data[i - 1] != '\r')
+                return true;
+        }
+    }
+    return false;
+}
+
 Result<void> HttpRequest::parseRequestLine(const std::string& line)
 {
     // line includes CRLF
@@ -1096,6 +1111,15 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
             std::string line = extractLine(data, len);  // 「\r\n」を改行とする
             if (line.empty())
             {
+                // RFC 9112 requires CRLF. If we already received bare LF, it is
+                // a syntax error (do not wait for more data).
+                if (containsBareLf_(data, cursor_, len))
+                {
+                    phase_ = kError;
+                    parse_error_status_ = HttpStatus::BAD_REQUEST;
+                    return Result<size_t>(
+                        ERROR, "LF without CRLF in request line");
+                }
                 // CRLF が来ないまま巨大な request-line を溜め込ませない
                 if (limits_.max_request_line_length != 0 &&
                     len > limits_.max_request_line_length + 2)
@@ -1149,6 +1173,15 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
             std::string line = extractLine(data, len);  // 「\r\n」を改行とする
             if (line.empty())
             {
+                // RFC 9112 requires CRLF. If we already received bare LF, it is
+                // a syntax error (do not wait for more data).
+                if (containsBareLf_(data, cursor_, len))
+                {
+                    phase_ = kError;
+                    parse_error_status_ = HttpStatus::BAD_REQUEST;
+                    return Result<size_t>(
+                        ERROR, "LF without CRLF in header section");
+                }
                 // CRLF が来ないまま巨大な header section を溜め込ませない
                 if (wouldExceedLimit(
                         header_bytes_parsed_, len, limits_.max_header_bytes))

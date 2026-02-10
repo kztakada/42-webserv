@@ -160,7 +160,7 @@ Result<std::string> AutoIndexRenderer::buildBody(
         struct dirent* de = ::readdir(dp);
         if (de == NULL)
             break;
-        const std::string name(de->d_name ? de->d_name : "");
+        const std::string name(de->d_name);
         if (name.empty())
             continue;
         if (name == "." || name == "..")

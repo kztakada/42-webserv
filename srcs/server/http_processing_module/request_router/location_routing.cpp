@@ -1,6 +1,7 @@
 #include "server/http_processing_module/request_router/location_routing.hpp"
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "utils/path.hpp"
 
@@ -451,6 +452,12 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
                 !S_ISREG(st.st_mode))
             {
                 status_ = http::HttpStatus::NOT_FOUND;
+                return applyErrorPageOrRespondError_();
+            }
+
+            if (::access(script_physical.unwrap().str().c_str(), X_OK) != 0)
+            {
+                status_ = http::HttpStatus::FORBIDDEN;
                 return applyErrorPageOrRespondError_();
             }
 

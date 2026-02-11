@@ -132,6 +132,7 @@ class HttpSession : public FdSession
 
     // http_session_helpers.cpp
     void installBodySourceAndWriter_(utils::OwnedPtr<BodySource> body_source);
+    void cleanupCgiOnClose_();
     Result<void> buildErrorOutput_(
         http::HttpStatus status, RequestProcessor::Output* out);
     Result<void> buildProcessorOutputOrServerError_(

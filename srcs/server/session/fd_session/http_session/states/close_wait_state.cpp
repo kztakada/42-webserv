@@ -10,6 +10,7 @@ Result<void> CloseWaitState::handleEvent(
     HttpSession& context, const FdEvent& event)
 {
     (void)event;
+    context.cleanupCgiOnClose_();
     context.context_.is_complete = true;
     context.controller_.requestDelete(&context);
     return Result<void>();

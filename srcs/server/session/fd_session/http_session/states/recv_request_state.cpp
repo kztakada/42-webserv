@@ -43,6 +43,7 @@ Result<void> RecvRequestState::handleEvent(
         {
             context.changeState(new CloseWaitState());
             context.context_.socket_fd.shutdown();
+            context.cleanupCgiOnClose_();
             context.controller_.requestDelete(&context);
             return Result<void>();
         }
@@ -101,6 +102,7 @@ Result<void> RecvRequestState::handleEvent(
                 // クライアントが切断
                 context.changeState(new CloseWaitState());
                 context.context_.socket_fd.shutdown();
+                context.cleanupCgiOnClose_();
                 context.controller_.requestDelete(&context);
                 return Result<void>();
             }

@@ -1,3 +1,6 @@
+#include <unistd.h>
+
+#include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
 
 namespace server
@@ -23,6 +26,29 @@ void HttpSession::installBodySourceAndWriter_(
         module_.makeEncoderOptions(context_.request);
     context_.response_writer = new HttpResponseWriter(
         context_.response, opt, context_.body_source.get());
+}
+
+void HttpSession::cleanupCgiOnClose_()
+{
+    if (context_.active_cgi_session != NULL)
+    {
+        controller_.requestDelete(context_.active_cgi_session);
+        context_.active_cgi_session = NULL;
+    }
+
+    // CGI headers 完了後、stdout(fd) を親が保持している場合はここで回収する。
+    if (context_.cgi_stdout_fd_for_response >= 0)
+    {
+        clearBodyWatch_();
+        controller_.unregisterFd(context_.cgi_stdout_fd_for_response);
+        ::close(context_.cgi_stdout_fd_for_response);
+        context_.cgi_stdout_fd_for_response = -1;
+    }
+
+    context_.cgi_prefetched_body.clear();
+    context_.waiting_cgi_first_body = false;
+    context_.waiting_cgi_first_body_start = 0;
+    context_.pause_write_until_body_ready = false;
 }
 
 // processError を試み、失敗したら setSimpleErrorResponse_

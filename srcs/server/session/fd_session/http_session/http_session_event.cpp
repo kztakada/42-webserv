@@ -1,7 +1,7 @@
 #include "server/session/fd_session/cgi_session.hpp"
 #include "server/session/fd_session/http_session.hpp"
-#include "server/session/fd_session_controller.hpp"
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
+#include "server/session/fd_session_controller.hpp"
 
 namespace server
 {
@@ -18,6 +18,11 @@ Result<void> HttpSession::handleEvent(const FdEvent& event)
     // タイムアウトやエラーは全状態で共通してセッション終了
     if (event.type == kTimeoutEvent || event.type == kErrorEvent)
     {
+        // 親が先に delete されると、CgiSession 側の parent_session_ 参照が
+        // ダングリングになり UAF になり得るため、エラー時は必ず CGI
+        // も回収する。
+        cleanupCgiOnClose_();
+
         // 強制的にクローズ待機状態へ
         changeState(new CloseWaitState());
         // 即時反映

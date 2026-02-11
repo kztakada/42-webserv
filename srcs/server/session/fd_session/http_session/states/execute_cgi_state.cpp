@@ -39,12 +39,7 @@ Result<void> ExecuteCgiState::handleEvent(
         context.changeState(new CloseWaitState());
         context.context_.socket_fd.shutdown();
 
-        if (context.getContext().active_cgi_session != NULL)
-        {
-            context.controller_.requestDelete(
-                context.getContext().active_cgi_session);
-            context.getContext().active_cgi_session = NULL;
-        }
+        context.cleanupCgiOnClose_();
         context.controller_.requestDelete(&context);
     }
     return Result<void>();

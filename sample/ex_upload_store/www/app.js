@@ -1,145 +1,103 @@
-/*
-  ex_upload_store: 静的サイトから upload_store に生POST
+document.addEventListener('DOMContentLoaded', () => {
+    const fileList = document.getElementById('file-list');
+    const addFileBtn = document.getElementById('add-file-btn');
+    const form = document.getElementById('upload-form');
+    const statusDiv = document.getElementById('status');
+    const textInput = document.getElementById('text-input');
 
-  NOTE:
-  - 同一オリジンの相対URL（/upload）に POST する
-  - 送信は multipart/form-data（FormData）
-*/
+    // Function to add a new file input field
+    function addFileInput() {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'file-input-wrapper';
+        wrapper.style.marginBottom = '10px';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.gap = '10px';
 
-const UPLOAD_BASE_PATH = "/upload";
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.name = 'files';
+        input.style.color = 'white';
 
-const drop = document.getElementById("drop");
-const fileInput = document.getElementById("file");
-const preview = document.getElementById("preview");
-const log = document.getElementById("log");
-const uploadUrl = document.getElementById("uploadUrl");
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = '削除';
+        removeBtn.style.cursor = 'pointer';
+        removeBtn.style.padding = '4px 8px';
+        removeBtn.style.backgroundColor = 'rgba(255, 100, 100, 0.2)';
+        removeBtn.style.border = '1px solid rgba(255, 100, 100, 0.4)';
+        removeBtn.style.color = 'white';
+        removeBtn.style.borderRadius = '4px';
+        
+        removeBtn.onclick = () => {
+            wrapper.remove();
+        };
 
-uploadUrl.textContent = UPLOAD_BASE_PATH + "/<filename>";
+        wrapper.appendChild(input);
+        wrapper.appendChild(removeBtn);
+        fileList.appendChild(wrapper);
+    }
 
-function setLog(text) {
-  log.textContent = text;
-}
+    // Add initial file input
+    addFileInput();
 
-function escapeName(name) {
-  // 保存先パスの leaf に使うので、極端な文字は避ける
-  return String(name)
-    .replace(/\//g, "_")
-    .replace(/\\/g, "_")
-    .replace(/\s+/g, "_")
-    .slice(0, 120);
-}
+    // Event listener for adding more file inputs
+    addFileBtn.addEventListener('click', addFileInput);
 
-function buildUploadLeaf(file) {
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const base = file && file.name ? escapeName(file.name) : "upload.bin";
-  return ts + "_" + base;
-}
+    // Handle form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        statusDiv.textContent = 'Uploading...';
+        statusDiv.style.color = 'var(--accent)';
 
-function showPreview(file) {
-  if (!file) {
-    preview.innerHTML = '<div class="preview__empty">未選択</div>';
-    return;
-  }
-  if (!file.type || !file.type.startsWith("image/")) {
-    preview.innerHTML = '<div class="preview__empty">画像ではありません</div>';
-    return;
-  }
+        const formData = new FormData();
+        
+        // Append all selected files from file inputs
+        const fileInputs = fileList.querySelectorAll('input[type="file"]');
+        let fileCount = 0;
+        fileInputs.forEach(input => {
+            if (input.files.length > 0) {
+                for (let i = 0; i < input.files.length; i++) {
+                    formData.append('files', input.files[i]);
+                    fileCount++;
+                }
+            }
+        });
 
-  const img = document.createElement("img");
-  img.alt = "preview";
-  preview.innerHTML = "";
-  preview.appendChild(img);
+        // Append text input as a file if it has content
+        const textContent = textInput.value;
+        if (textContent.trim() !== '') {
+            const textFile = new File([textContent], "input.txt", { type: "text/plain" });
+            formData.append('files', textFile);
+            fileCount++;
+        }
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    img.src = reader.result;
-  };
-  reader.readAsDataURL(file);
-}
+        if (fileCount === 0) {
+            statusDiv.textContent = 'No files to upload.';
+            statusDiv.style.color = 'orange';
+            return;
+        }
 
-async function uploadFile(file) {
-  if (!file) return;
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
 
-  const leaf = buildUploadLeaf(file);
-  const url = UPLOAD_BASE_PATH + "/" + encodeURIComponent(leaf);
-
-  setLog(
-    [
-      "uploading...",
-      `file: ${file.name}`,
-      `type: ${file.type || "(none)"}`,
-      `size: ${file.size} bytes`,
-      `url:  ${url}`,
-      "",
-    ].join("\n")
-  );
-
-  let resp;
-  try {
-    const form = new FormData();
-    // フィールド名はサーバー側で特に固定しない想定（file part を抽出）
-    form.append("file", file, file.name || "upload.bin");
-
-    resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "X-Original-Filename": file.name || "",
-      },
-      // Content-Type はブラウザが boundary 付きで自動設定する
-      body: form,
+            if (response.ok) {
+                const resultText = await response.text();
+                statusDiv.textContent = `Upload successful! (${response.status}) ${resultText}`;
+                statusDiv.style.color = '#4ade80'; // Green
+                // Optional: Clear form
+                // form.reset(); 
+                // fileList.innerHTML = ''; addFileInput();
+            } else {
+                statusDiv.textContent = `Upload failed: ${response.status} ${response.statusText}`;
+                statusDiv.style.color = '#f87171'; // Red
+            }
+        } catch (error) {
+            statusDiv.textContent = `Error: ${error.message}`;
+            statusDiv.style.color = '#f87171';
+        }
     });
-  } catch (e) {
-    setLog("fetch failed: " + String(e));
-    return;
-  }
-
-  const text = await resp.text().catch(() => "");
-
-  setLog(
-    [
-      "done",
-      `status: ${resp.status} ${resp.statusText}`,
-      "",
-      "response body:",
-      text,
-      "",
-      "保存先は conf の upload_store 配下です（README 参照）。",
-    ].join("\n")
-  );
-}
-
-function handleFiles(files) {
-  if (!files || files.length === 0) return;
-  const file = files[0];
-  showPreview(file);
-  uploadFile(file);
-}
-
-// Drag & Drop
-["dragenter", "dragover"].forEach((ev) => {
-  drop.addEventListener(ev, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    drop.classList.add("is-dragover");
-  });
-});
-
-["dragleave", "drop"].forEach((ev) => {
-  drop.addEventListener(ev, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    drop.classList.remove("is-dragover");
-  });
-});
-
-drop.addEventListener("drop", (e) => {
-  const dt = e.dataTransfer;
-  if (!dt) return;
-  handleFiles(dt.files);
-});
-
-// File input
-fileInput.addEventListener("change", (e) => {
-  const files = e.target.files;
-  handleFiles(files);
 });

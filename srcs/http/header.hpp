@@ -112,6 +112,8 @@ class HeaderName
         // HTTP State Management (Cookies)
         COOKIE,
         SET_COOKIE,
+        // セキュリティー
+        X_CONTENT_TYPE_OPTIONS,
         // その他の一般的なヘッダー
         DATE,
         VIA,
@@ -225,6 +227,8 @@ class HeaderName
                 return "Cookie";
             case SET_COOKIE:
                 return "Set-Cookie";
+            case X_CONTENT_TYPE_OPTIONS:
+                return "X-Content-Type-Options";
             case DATE:
                 return "Date";
             case VIA:

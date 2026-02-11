@@ -19,6 +19,7 @@ HttpResponse::HttpResponse()
       has_expected_content_length_(false),
       expected_content_length_(0)
 {
+    setDefault();
 }
 
 HttpResponse::HttpResponse(HttpStatus status)
@@ -30,6 +31,7 @@ HttpResponse::HttpResponse(HttpStatus status)
       has_expected_content_length_(false),
       expected_content_length_(0)
 {
+    setDefault();
 }
 
 HttpResponse::HttpResponse(const HttpResponse& rhs)
@@ -69,6 +71,7 @@ void HttpResponse::reset()
     headers_.clear();
     has_expected_content_length_ = false;
     expected_content_length_ = 0;
+    setDefault();
 }
 
 HttpResponse::Phase HttpResponse::phase() const { return phase_; }
@@ -168,6 +171,12 @@ Result<const std::vector<std::string>&> HttpResponse::getHeader(
 }
 
 const HeaderMap& HttpResponse::getHeaders() const { return headers_; }
+
+void HttpResponse::setDefault()
+{
+    setHeader(
+        HeaderName(HeaderName::X_CONTENT_TYPE_OPTIONS).toString(), "nosniff");
+}
 
 bool HttpResponse::hasExpectedContentLength() const
 {

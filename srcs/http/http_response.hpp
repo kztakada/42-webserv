@@ -58,6 +58,7 @@ class HttpResponse
     Result<const std::vector<std::string>&> getHeader(
         const std::string& name) const;
     const HeaderMap& getHeaders() const;
+    void setDefault();
 
     // Content-Length（あれば保持）
     bool hasExpectedContentLength() const;

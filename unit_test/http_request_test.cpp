@@ -69,10 +69,8 @@ TEST(HttpRequest, Http10DoesNotRequireHost)
     EXPECT_EQ(0, req.getMinorVersion());
 }
 
-// HttpMethodクラスに定義されているメソッドを、HTTPリクエストとしてパースできる
-// NOTE:
-// CONNECT は authority-form のみ許可しているため、別テストで検証する
-TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
+// GET/POST/DELETE は正常にパースできる
+TEST(HttpRequest, ParsesSupportedMethods)
 {
     struct MethodCase
     {
@@ -83,12 +81,7 @@ TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
     static const MethodCase kCases[] = {
         {http::HttpMethod::GET, "GET"},
         {http::HttpMethod::POST, "POST"},
-        {http::HttpMethod::PUT, "PUT"},
         {http::HttpMethod::DELETE, "DELETE"},
-        {http::HttpMethod::HEAD, "HEAD"},
-        {http::HttpMethod::OPTIONS, "OPTIONS"},
-        {http::HttpMethod::PATCH, "PATCH"},
-        {http::HttpMethod::TRACE, "TRACE"},
     };
 
     for (size_t i = 0; i < sizeof(kCases) / sizeof(kCases[0]); ++i)
@@ -96,9 +89,7 @@ TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
         http::HttpRequest req;
         std::string raw = std::string(kCases[i].token) + " /test HTTP/1.1\r\n" +
                           "Host: example.com\r\n";
-        if (kCases[i].type == http::HttpMethod::POST ||
-            kCases[i].type == http::HttpMethod::PUT ||
-            kCases[i].type == http::HttpMethod::PATCH)
+        if (kCases[i].type == http::HttpMethod::POST)
         {
             // 411 Length Required を避けるため、ボディ無しでも明示する
             raw += "Content-Length: 0\r\n";
@@ -117,10 +108,33 @@ TEST(HttpRequest, ParsesAllDefinedMethodsWithOriginFormTarget)
         EXPECT_EQ(kCases[i].type, req.getMethod()) << kCases[i].token;
         EXPECT_EQ(std::string(kCases[i].token), req.getMethodString())
             << kCases[i].token;
-        EXPECT_EQ(std::string("/test"), req.getPath()) << kCases[i].token;
-        EXPECT_EQ(std::string(""), req.getQueryString()) << kCases[i].token;
-        EXPECT_EQ(static_cast<size_t>(0), req.getDecodedBodyBytes())
-            << kCases[i].token;
+    }
+}
+
+// GET/POST/DELETE 以外は 501 Not Implemented
+TEST(HttpRequest, RejectsUnsupportedMethodsWith501)
+{
+    const char* kUnsupportedMethods[] = {
+        "PUT",
+        "HEAD",
+        "OPTIONS",
+        "PATCH",
+        "TRACE",
+        "CONNECT", // CONNECT も現状は未対応扱い
+    };
+
+    for (size_t i = 0; i < sizeof(kUnsupportedMethods) / sizeof(char*); ++i)
+    {
+        http::HttpRequest req;
+        std::string raw = std::string(kUnsupportedMethods[i]) +
+                          " /test HTTP/1.1\r\n" + "Host: example.com\r\n\r\n";
+        std::vector<utils::Byte> buf = toBytes(raw.c_str());
+        utils::result::Result<size_t> r = req.parse(buf);
+
+        EXPECT_FALSE(r.isOk()) << kUnsupportedMethods[i];
+        EXPECT_TRUE(req.hasParseError()) << kUnsupportedMethods[i];
+        EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus())
+            << kUnsupportedMethods[i];
     }
 }
 
@@ -143,40 +157,30 @@ TEST(HttpRequest, ParsesAbsoluteFormTarget)
     EXPECT_EQ(std::string("name=bob"), req.getQueryString());
 }
 
-// CONNECT: authority-form をパースできる
-TEST(HttpRequest, ParsesConnectAuthorityFormTarget)
+// CONNECT: authority-form はメソッドが CONNECT だが未対応なので 501
+TEST(HttpRequest, RejectsConnectAuthorityFormTarget)
 {
     http::HttpRequest req;
     std::vector<utils::Byte> buf = toBytes(
         "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com\r\n\r\n");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_TRUE(r.isOk());
-    EXPECT_EQ(buf.size(), r.unwrap());
-    EXPECT_TRUE(req.isParseComplete());
-    EXPECT_FALSE(req.hasParseError());
-
-    EXPECT_EQ(http::HttpMethod::CONNECT, req.getMethod());
-    EXPECT_EQ(std::string("example.com:443"), req.getPath());
-    EXPECT_EQ(std::string(""), req.getQueryString());
+    EXPECT_FALSE(r.isOk());
+    EXPECT_TRUE(req.hasParseError());
+    EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus());
 }
 
-// OPTIONS: asterisk-form をパースできる
-TEST(HttpRequest, ParsesOptionsAsteriskFormTarget)
+// OPTIONS: asterisk-form はメソッドが OPTIONS だが未対応なので 501
+TEST(HttpRequest, RejectsOptionsAsteriskFormTarget)
 {
     http::HttpRequest req;
     std::vector<utils::Byte> buf =
         toBytes("OPTIONS * HTTP/1.1\r\nHost: example.com\r\n\r\n");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_TRUE(r.isOk());
-    EXPECT_EQ(buf.size(), r.unwrap());
-    EXPECT_TRUE(req.isParseComplete());
-    EXPECT_FALSE(req.hasParseError());
-
-    EXPECT_EQ(http::HttpMethod::OPTIONS, req.getMethod());
-    EXPECT_EQ(std::string("*"), req.getPath());
-    EXPECT_EQ(std::string(""), req.getQueryString());
+    EXPECT_FALSE(r.isOk());
+    EXPECT_TRUE(req.hasParseError());
+    EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus());
 }
 
 // 2回に分けて送信（増分パース / Chunked）

@@ -10,6 +10,7 @@
 
 - CGI 拡張子がマッチした場合に限り、`LocationRouting::decideAction_()` がスクリプト実体を `stat()` し、
   - 不在/regular file でない場合は `404 Not Found`（`RESPOND_ERROR`）を確定させます。
+  - 実行権限が無い場合（`access(X_OK)` 失敗）は `403 Forbidden`（`RESPOND_ERROR`）を確定させます。
   - ねらい: 「スクリプト不在（404）」と「CGI実行時異常（502/504）」を区別するため。
 
 ---

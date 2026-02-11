@@ -76,6 +76,9 @@ run_sample sample/01_static/webserv.conf bash -lc '
 run_sample sample/02_error_page/webserv.conf bash -lc '
   set -e
 
+  # CGI script が実行可能であること（403 テスト導入に伴う前提）
+  chmod 755 sample/02_error_page/www/cgi/loop.bad sample/02_error_page/www/cgi/bad_header.bad
+
   r=$(curl -sS -i http://127.0.0.1:18082/hello.txt)
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "hello from sample/02_error_page"
@@ -126,6 +129,9 @@ run_sample sample/03_autoindex/webserv.conf bash -lc '
 # --- 04_cgi ---
 run_sample sample/04_cgi/webserv.conf bash -lc '
   set -e
+
+  # CGI script が実行可能であること（403 テスト導入に伴う前提）
+  chmod 755 sample/04_cgi/www/cgi/hello.py sample/04_cgi/www/cgi/hello.php sample/04_cgi/www/cgi/hello.js sample/04_cgi/www/cgi/hello.sh
 
   # python
   r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.py?lang=py")
@@ -228,6 +234,23 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
   # 4) 存在しない CGI script -> 404
   r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_bash/no_such_script_abcdef.sh")
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 404"
+
+  # 5) 実行権限が無い CGI script -> 403
+  chmod 644 sample/04_cgi/www/cgi/no_exec_permission.sh
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_bash/no_exec_permission.sh")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  chmod 644 sample/04_cgi/www/cgi/no_exec_permission.py
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_py/no_exec_permission.py")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  chmod 644 sample/04_cgi/www/cgi/no_exec_permission.php
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_php/no_exec_permission.php")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  chmod 644 sample/04_cgi/www/cgi/no_exec_permission.js
+  r=$(curl -sS -i --max-time 5 "http://127.0.0.1:18084/cgi_node/no_exec_permission.js")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
 '
 
 # --- 05_upload_store ---
@@ -359,6 +382,10 @@ run_sample sample/05_upload_store/webserv_location_override.conf bash -lc '
 # --- 06_cookie ---
 run_sample sample/06_cookie/webserv.conf bash -lc '
   set -euo pipefail
+
+  # CGI script が実行可能であること（403 テスト導入に伴う前提）
+  chmod 755 sample/06_cookie/www/cgi/cookie.php sample/06_cookie/www/cgi/cookie_setcookie.php
+
   python3 sample/06_cookie/test_cookie.py
 '
 

@@ -17,10 +17,16 @@ CGI 拡張子がマッチした場合でも、実装は `LocationRouting::decide
 - `stat()` が失敗（存在しない等）
 - regular file ではない（`S_ISREG` でない）
 
+加えて、スクリプト実体が存在しても **実行権限が無い場合は `403 Forbidden`** を返す。
+
+- `access(script_filename, X_OK) != 0`
+
 この場合:
 
 - `LocationRouting.getHttpStatus()` は `404`
 - `LocationRouting.getNextAction()` は `RESPOND_ERROR`（error_page があれば内部リダイレクトに切り替わり得る）
+
+403 の場合も同様に `RESPOND_ERROR`（または error_page により内部リダイレクト）になる。
 
 目的:
 

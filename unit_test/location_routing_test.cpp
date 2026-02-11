@@ -441,6 +441,7 @@ TEST(LocationRouting, CgiContextSplitsScriptNameAndPathInfo)
 
     // script 実体がない場合は 404 になる仕様のため、ダミーを作成しておく
     writeFileOrDie_(root + "/test.cgi", "#!/bin/sh\n");
+    ASSERT_EQ(0, ::chmod((root + "/test.cgi").c_str(), 0755));
 
     server::LocationDirectiveConf loc;
     ASSERT_TRUE(loc.setPathPattern("/cgi-bin").isOk());

@@ -158,6 +158,69 @@ class ContentType
     // std::string が必要な場合のためのラッパー
     std::string toString() const { return std::string(c_str()); }
 
+    std::string toExtention() const
+    {
+        switch (type_)
+        {
+            case TEXT_HTML:
+                return "html";
+            case TEXT_PLAIN:
+                return "txt";
+            case TEXT_CSS:
+                return "css";
+            case TEXT_JAVASCRIPT:
+                return "js";
+            case TEXT_XML:
+                return "xml";
+            case TEXT_CSV:
+                return "csv";
+            case APPLICATION_JSON:
+                return "json";
+            case APPLICATION_XML:
+                return "xml";
+            case APPLICATION_PDF:
+                return "pdf";
+            case APPLICATION_ZIP:
+                return "zip";
+            case IMAGE_PNG:
+                return "png";
+            case IMAGE_JPEG:
+                return "jpg";
+            case IMAGE_GIF:
+                return "gif";
+            case IMAGE_SVG_XML:
+                return "svg";
+            case IMAGE_WEBP:
+                return "webp";
+            case IMAGE_BMP:
+                return "bmp";
+            case IMAGE_ICO:
+                return "ico";
+            case VIDEO_MP4:
+                return "mp4";
+            case VIDEO_MPEG:
+                return "mpeg";
+            case VIDEO_WEBM:
+                return "webm";
+            case AUDIO_MPEG:
+                return "mp3";
+            case AUDIO_WAV:
+                return "wav";
+            case AUDIO_OGG:
+                return "ogg";
+            case FONT_WOFF:
+                return "woff";
+            case FONT_WOFF2:
+                return "woff2";
+            case FONT_TTF:
+                return "ttf";
+            case FONT_OTF:
+                return "otf";
+            default:
+                return "bin";
+        }
+    }
+
     // 6. 文字列からの生成 (fromMimeString)
     static ContentType fromMimeString(const char* mime_type)
     {

@@ -125,6 +125,9 @@ post_file() {
 }
 
 if [[ "$1" == "default" ]]; then
+  # ディレクトリ宛の timestamp ファイルが残っているとテストが揺れるので先に掃除
+  rm -f "$store"/*_uploaded*.bin 2>/dev/null || true
+
   # デフォルト(1MB)想定: 2MB は 413
   p2m="$tmp_dir/white_2m.jpg"
   make_payload_from_white_jpg "$p2m" 2097152
@@ -143,6 +146,24 @@ if [[ "$1" == "default" ]]; then
   assert_status "$r" 201
   test -f "$dest_512k"
   test "$(wc -c <"$dest_512k" | tr -d '[:space:]')" -eq "$(wc -c <"$p512k" | tr -d '[:space:]')"
+
+  # multipart/form-data: filename + Content-Type から保存ファイル名/拡張子が決まる
+  dest_multipart_png="$store/default_512k_multipart.png"
+  rm -f "$dest_multipart_png"
+  r=$(curl -sS -i -X POST \
+    -F "file=@$p512k;filename=default_512k_multipart;type=image/png" \
+    "http://127.0.0.1:${port}/upload/")
+  assert_status "$r" 201
+  test -f "$dest_multipart_png"
+  test "$(wc -c <"$dest_multipart_png" | tr -d '[:space:]')" -eq "$(wc -c <"$p512k" | tr -d '[:space:]')"
+
+  # URL がディレクトリ指定の場合は timestamp_uploaded.bin で保存される
+  p1k="$tmp_dir/raw_1k.bin"
+  dd if=/dev/zero of="$p1k" bs=1K count=1 status=none
+  r=$(post_file "http://127.0.0.1:${port}/upload/" "$p1k")
+  assert_status "$r" 201
+  count=$(ls -1 "$store" | grep -E "^[0-9]{14}_uploaded(_[0-9]+)?\\.bin$" | wc -l | tr -d "[:space:]")
+  test "$count" -eq 1
 
   echo "OK: default"
   exit 0

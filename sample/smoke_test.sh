@@ -132,6 +132,7 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
 
   # CGI script が実行可能であること（403 テスト導入に伴う前提）
   chmod 755 sample/04_cgi/www/cgi/hello.py sample/04_cgi/www/cgi/hello.php sample/04_cgi/www/cgi/hello.js sample/04_cgi/www/cgi/hello.sh
+  chmod 755 sample/04_cgi/www/cgi/stdin_meta.py sample/04_cgi/www/cgi/stdin_meta.php sample/04_cgi/www/cgi/stdin_meta.js sample/04_cgi/www/cgi/stdin_meta.sh
 
   # python
   r=$(curl -sS -i "http://127.0.0.1:18084/cgi/hello.py?lang=py")
@@ -176,6 +177,68 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
   r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/hello.sh" --data "jkl")
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "body=jkl"
+
+  # --- CGI stdin binary: body 内に \0 を含んでも全文が CGI に渡る ---
+  tmp_nul=$(mktemp /tmp/webserv_cgi_nul_XXXXXX.bin)
+  cleanup_nul() { rm -f "$tmp_nul"; }
+  trap cleanup_nul EXIT
+  P="$tmp_nul" python3 - <<PY
+import os
+p=os.environ["P"]
+with open(p,"wb") as f:
+    f.write(b"abc\x00def\n")
+PY
+
+  # python
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/stdin_meta.py" --data-binary "@$tmp_nul")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body_len=8"
+  echo "$r" | grep -q "nul_bytes=1"
+
+  # php
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/stdin_meta.php" --data-binary "@$tmp_nul")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body_len=8"
+  echo "$r" | grep -q "nul_bytes=1"
+
+  # node
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/stdin_meta.js" --data-binary "@$tmp_nul")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body_len=8"
+  echo "$r" | grep -q "nul_bytes=1"
+
+  # bash
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi/stdin_meta.sh" --data-binary "@$tmp_nul")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "body_len=8"
+
+  trap - EXIT
+  cleanup_nul
+
+  # --- CGI client_max_body_size: 超過は 413 ---
+  tmp_big=$(mktemp /tmp/webserv_cgi_big_XXXXXX.bin)
+  cleanup_big() { rm -f "$tmp_big"; }
+  trap cleanup_big EXIT
+  dd if=/dev/zero of="$tmp_big" bs=1K count=1 status=none
+
+  # python
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi_small/hello.py" --data-binary "@$tmp_big")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+
+  # php
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi_small/hello.php" --data-binary "@$tmp_big")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+
+  # node
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi_small/hello.js" --data-binary "@$tmp_big")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+
+  # bash
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/cgi_small/hello.sh" --data-binary "@$tmp_big")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+
+  trap - EXIT
+  cleanup_big
 
   # locationごとの CGI 対象分離
   # /cgi_py は .py のみ CGI として動く
@@ -260,25 +323,48 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   store="sample/05_upload_store/store_default"
   dest_2m="$store/default_2m.bin"
   dest_512k="$store/default_512k.bin"
-  dest_512k_multipart="$store/default_512k_multipart.bin"
+  dest_512k_multipart_png="$store/default_512k_multipart.png"
+  dest_bodyname_png="$store/bodyname.png"
+  dest_noct_bin="$store/noct.bin"
+  dest_multi_a_png="$store/a.png"
+  dest_multi_b_txt="$store/b.txt"
+  dest_nul_raw="$store/nul_raw.bin"
+  dest_nul_multipart_bin="$store/nul_multipart.bin"
   dest_overwrite="$store/overwrite.bin"
   tmp_small=$(mktemp /tmp/webserv_upload_512k_XXXXXX.bin)
   tmp_big=$(mktemp /tmp/webserv_upload_2m_XXXXXX.bin)
+  tmp_small2=$(mktemp /tmp/webserv_upload_1k_XXXXXX.bin)
+  tmp_txt=$(mktemp /tmp/webserv_upload_txt_XXXXXX.txt)
+  tmp_nul=$(mktemp /tmp/webserv_upload_nul_XXXXXX.bin)
+  tmp_mp_noct=$(mktemp /tmp/webserv_multipart_noct_XXXXXX.bin)
+  tmp_mp_get=$(mktemp /tmp/webserv_multipart_get_XXXXXX.bin)
   tmp_overwrite_1=$(mktemp /tmp/webserv_upload_overwrite1_XXXXXX.bin)
   tmp_overwrite_2=$(mktemp /tmp/webserv_upload_overwrite2_XXXXXX.bin)
 
   cleanup_upload() {
-    rm -f "$tmp_small" "$tmp_big"
+    rm -f "$tmp_small" "$tmp_big" "$tmp_small2" "$tmp_txt" "$tmp_nul" "$tmp_mp_noct" "$tmp_mp_get"
     rm -f "$tmp_overwrite_1" "$tmp_overwrite_2"
-    rm -f "$dest_2m" "$dest_512k" "$dest_512k_multipart" "$dest_overwrite"
+    rm -f "$dest_2m" "$dest_512k" "$dest_512k_multipart_png" "$dest_bodyname_png" "$dest_noct_bin" "$dest_multi_a_png" "$dest_multi_b_txt" "$dest_nul_raw" "$dest_nul_multipart_bin" "$dest_overwrite"
+    rm -f "$store"/*_uploaded*.bin 2>/dev/null || true
+    rm -f "$store"/*_uploaded*.png 2>/dev/null || true
   }
   trap cleanup_upload EXIT
 
   # デフォルト(1MB)想定: 2MB は 413
   dd if=/dev/zero of="$tmp_big" bs=1M count=2 status=none
+  before_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
   r=$(curl -sS -i -X POST --data-binary "@$tmp_big" http://127.0.0.1:18085/upload/default_2m.bin)
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
   test ! -f "$dest_2m"
+  after_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  test "$before_count" -eq "$after_count"
+
+  # multipart/form-data でも client_max_body_size を超えたら 413 になる
+  before_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  r=$(curl -sS -i -X POST -F "file=@$tmp_big;filename=too_big;type=image/png" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 413"
+  after_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  test "$before_count" -eq "$after_count"
 
   # 512KB は成功（POST -> 201）
   dd if=/dev/zero of="$tmp_small" bs=1K count=512 status=none
@@ -290,14 +376,141 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
   test "$size_dest" -eq "$size_src"
 
-  # multipart/form-data でも成功（file part の中身だけ保存される）
-  r=$(curl -sS -i -X POST -F "file=@$tmp_small" http://127.0.0.1:18085/upload/default_512k_multipart.bin)
+  # multipart/form-data: filename と Content-Type から保存ファイル名/拡張子が決まる
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small;filename=default_512k_multipart;type=image/png" http://127.0.0.1:18085/upload/)
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
-  test -f "$dest_512k_multipart"
+  test -f "$dest_512k_multipart_png"
 
-  size_dest=$(wc -c <"$dest_512k_multipart" | tr -d "[:space:]")
+  size_dest=$(wc -c <"$dest_512k_multipart_png" | tr -d "[:space:]")
   size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
   test "$size_dest" -eq "$size_src"
+
+  # multipart/form-data: filename 指定が無い(空)場合、ユニークなデフォルト名が適用される
+  rm -f "$store"/*_uploaded*.png 2>/dev/null || true
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small;filename=;type=image/png" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small;filename=;type=image/png" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  count=$(ls -1 "$store" | grep -E "^[0-9]{14}_uploaded(_[0-9]+)?\\.png$" | wc -l | tr -d "[:space:]")
+  test "$count" -eq 2
+
+  # multipart/form-data: Content-Type が無い場合、デフォルト拡張子(bin)が適用される
+  rm -f "$dest_noct_bin" 2>/dev/null || true
+  boundary="----webserv_noct_$RANDOM$RANDOM"
+  BOUNDARY="$boundary" SRC="$tmp_small" DST="$tmp_mp_noct" python3 - <<PY
+import os
+boundary = os.environ["BOUNDARY"]
+src = os.environ["SRC"]
+dst = os.environ["DST"]
+with open(src, "rb") as f:
+    data = f.read()
+head = (
+    "--" + boundary + "\r\n"
+    "Content-Disposition: form-data; name=\"file\"; filename=\"noct\"\r\n"
+    "\r\n"
+).encode("ascii")
+tail = ("\r\n--" + boundary + "--\r\n").encode("ascii")
+with open(dst, "wb") as f:
+    f.write(head)
+    f.write(data)
+    f.write(tail)
+PY
+  r=$(curl -sS -i -X POST -H "Content-Type: multipart/form-data; boundary=$boundary" --data-binary "@$tmp_mp_noct" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_noct_bin"
+  size_dest=$(wc -c <"$dest_noct_bin" | tr -d "[:space:]")
+  size_src=$(wc -c <"$tmp_small" | tr -d "[:space:]")
+  test "$size_dest" -eq "$size_src"
+
+  # multipart/form-data: リクエスト先の保存ファイル名より、ボディ指定 filename/Content-Type を優先する
+  rm -f "$dest_bodyname_png" 2>/dev/null || true
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small;filename=bodyname.txt;type=image/png" http://127.0.0.1:18085/upload/request.pdf)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_bodyname_png"
+
+  # multipart/form-data: 異なる拡張子のファイルを同時にアップロードできる
+  rm -f "$dest_multi_a_png" "$dest_multi_b_txt" 2>/dev/null || true
+  printf "hello\n" >"$tmp_txt"
+  dd if=/dev/zero of="$tmp_small2" bs=1K count=1 status=none
+  r=$(curl -sS -i -X POST \
+    -F "f1=@$tmp_small2;filename=a;type=image/png" \
+    -F "f2=@$tmp_txt;filename=b;type=text/plain" \
+    http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_multi_a_png"
+  test -f "$dest_multi_b_txt"
+  test "$(wc -c <"$dest_multi_a_png" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_small2" | tr -d "[:space:]")"
+  test "$(wc -c <"$dest_multi_b_txt" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_txt" | tr -d "[:space:]")"
+
+  # 保存データ途中に \0 が含まれていても保存できる（raw / multipart）
+  P="$tmp_nul" python3 - <<PY
+import os
+p=os.environ["P"]
+with open(p,"wb") as f:
+    f.write(b"abc\x00def\n")
+PY
+  rm -f "$dest_nul_raw" 2>/dev/null || true
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_nul" http://127.0.0.1:18085/upload/nul_raw.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_nul_raw"
+  A="$tmp_nul" B="$dest_nul_raw" python3 - <<PY
+import os, sys
+a=os.environ["A"]
+b=os.environ["B"]
+da=open(a,"rb").read()
+db=open(b,"rb").read()
+sys.exit(0 if da==db else 1)
+PY
+
+  rm -f "$dest_nul_multipart_bin" 2>/dev/null || true
+  r=$(curl -sS -i -X POST -F "file=@$tmp_nul;filename=nul_multipart;type=application/octet-stream" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  test -f "$dest_nul_multipart_bin"
+  A="$tmp_nul" B="$dest_nul_multipart_bin" python3 - <<PY
+import os, sys
+a=os.environ["A"]
+b=os.environ["B"]
+da=open(a,"rb").read()
+db=open(b,"rb").read()
+sys.exit(0 if da==db else 1)
+PY
+
+  # URL がディレクトリ指定の場合は timestamp_uploaded.bin で保存される
+  dd if=/dev/zero of="$tmp_small" bs=1K count=1 status=none
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_small" http://127.0.0.1:18085/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 201"
+  count=$(ls -1 "$store" | grep -E "^[0-9]{14}_uploaded(_[0-9]+)?\\.bin$" | wc -l | tr -d "[:space:]")
+  test "$count" -eq 1
+
+  # GET/DELETE で body を送っても upload_store されない（処理は各メソッドとして正常に返る）
+  before_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  r=$(curl -sS -i -X GET --data-binary "@$tmp_small" http://127.0.0.1:18085/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  boundary_get="----webserv_get_$RANDOM$RANDOM"
+  BOUNDARY="$boundary_get" DST="$tmp_mp_get" python3 - <<PY
+import os
+boundary=os.environ["BOUNDARY"]
+dst=os.environ["DST"]
+body=(
+    "--"+boundary+"\r\n"
+    "Content-Disposition: form-data; name=\"x\"\r\n"
+    "\r\n"
+    "abc\r\n"
+    "--"+boundary+"--\r\n"
+).encode("ascii")
+open(dst,"wb").write(body)
+PY
+  r=$(curl -sS -i -X GET -H "Content-Type: multipart/form-data; boundary=$boundary_get" --data-binary "@$tmp_mp_get" http://127.0.0.1:18085/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  after_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  test "$before_count" -eq "$after_count"
+
+  r=$(curl -sS -i -X DELETE --data-binary "@$tmp_small" http://127.0.0.1:18085/upload/overwrite.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
+  r=$(curl -sS -i -X DELETE -H "Content-Type: multipart/form-data; boundary=$boundary_get" --data-binary "@$tmp_mp_get" http://127.0.0.1:18085/upload/overwrite.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
+  after_count=$(find "$store" -maxdepth 1 -type f ! -name ".keep" | wc -l | tr -d "[:space:]")
+  test "$before_count" -eq "$after_count"
 
   # 同名ファイルが既にある場合は上書きされる（2回とも 201）
   printf "first\n" >"$tmp_overwrite_1"
@@ -312,6 +525,51 @@ run_sample sample/05_upload_store/webserv_default_limit.conf bash -lc '
   test -f "$dest_overwrite"
   test "$(wc -c <"$dest_overwrite" | tr -d "[:space:]")" -eq "$(wc -c <"$tmp_overwrite_2" | tr -d "[:space:]")"
 '
+
+# --- 05_upload_store: unwritable upload_store returns 403 (raw/multipart) ---
+tmp_unwritable_store=$(mktemp -d /tmp/webserv_unwritable_store_XXXXXX)
+tmp_unwritable_conf=$(mktemp /tmp/webserv_unwritable_conf_XXXXXX.conf)
+chmod 555 "$tmp_unwritable_store"
+cat >"$tmp_unwritable_conf" <<EOF
+server {
+  listen 127.0.0.1:18185;
+  server_name localhost;
+  root ./sample/05_upload_store/www;
+
+  location / {
+    allow_methods GET;
+  }
+
+  location /upload {
+    allow_methods POST;
+    upload_store $tmp_unwritable_store;
+  }
+}
+EOF
+
+run_sample "$tmp_unwritable_conf" bash -lc '
+  set -euo pipefail
+  tmp_small=$(mktemp /tmp/webserv_unwritable_small_XXXXXX.bin)
+  cleanup() { rm -f "$tmp_small"; }
+  trap cleanup EXIT
+
+  dd if=/dev/zero of="$tmp_small" bs=1K count=1 status=none
+
+  # raw: file target
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_small" http://127.0.0.1:18185/upload/a.bin)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  # raw: directory target
+  r=$(curl -sS -i -X POST --data-binary "@$tmp_small" http://127.0.0.1:18185/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+
+  # multipart/form-data
+  r=$(curl -sS -i -X POST -F "file=@$tmp_small;filename=unwritable;type=image/png" http://127.0.0.1:18185/upload/)
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 403"
+'
+
+chmod 755 "$tmp_unwritable_store" 2>/dev/null || true
+rm -rf "$tmp_unwritable_store" "$tmp_unwritable_conf"
 
 run_sample sample/05_upload_store/webserv_inherit_server_limit.conf bash -lc '
   set -euo pipefail

@@ -10,8 +10,8 @@ webserv の手動動作確認（`curl`）用のサンプル設定と素材置き
 - `01_static/`: 静的ファイル配信（200 + body）
 - `02_error_page/`: error_page（400/403/404/405/413/500）のカスタムHTML
 - `03_autoindex/`: autoindex（ディレクトリ一覧HTML）
-- `04_cgi/`: CGI（python/php/node/bash）
-- `05_upload_store/`: upload_store（保存先、client_max_body_size のデフォルト/継承/上書き、境界）
+- `04_cgi/`: CGI（python/php/node/bash、stdinに\0を含むPOST、client_max_body_size超過の413 など）
+- `05_upload_store/`: upload_store（保存先、client_max_body_size のデフォルト/継承/上書き、境界、multipart の edge、書き込み不可 403 など）
 - `06_cookie/`: CGI Cookie（Cookie->HTTP_COOKIE、Set-Cookie転送、2回アクセスでID保持）
 
 ## smoke test

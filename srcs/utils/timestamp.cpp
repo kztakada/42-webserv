@@ -28,4 +28,18 @@ std::string Timestamp::formatHmsFromEpochSeconds(long epoch_seconds)
        << std::setfill('0') << lt->tm_sec;
     return ss.str();
 }
+
+std::string Timestamp::nowYmdHmsCompact()
+{
+    const std::time_t t = std::time(NULL);
+    std::tm* lt = std::localtime(&t);
+
+    std::stringstream ss;
+    ss << std::setw(4) << std::setfill('0') << (lt->tm_year + 1900)
+       << std::setw(2) << std::setfill('0') << (lt->tm_mon + 1) << std::setw(2)
+       << std::setfill('0') << lt->tm_mday << std::setw(2) << std::setfill('0')
+       << lt->tm_hour << std::setw(2) << std::setfill('0') << lt->tm_min
+       << std::setw(2) << std::setfill('0') << lt->tm_sec;
+    return ss.str();
+}
 }  // namespace utils

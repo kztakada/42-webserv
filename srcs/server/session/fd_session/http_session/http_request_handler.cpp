@@ -112,7 +112,7 @@ HttpRequestHandler::ConditionalBodySink::ConditionalBodySink(
 Result<void> HttpRequestHandler::ConditionalBodySink::write(
     const utils::Byte* data, size_t len)
 {
-    if (request_.getMethod() == HttpMethod::GET)
+    if (request_.getMethod() != HttpMethod::POST)
         return Result<void>();
     return store_.append(data, len);
 }
@@ -139,7 +139,7 @@ Result<void> HttpRequestHandler::ensureRoutingAndApplyBodyLimit_()
     }
 
     // upload_store の場合は、body の保存先を upload_store 配下の
-    // destination_path に差し替える。
+    // destination に差し替える。
     if (!has_configured_body_store_for_upload_ &&
         location_routing_.getNextAction() == STORE_BODY)
     {
@@ -152,13 +152,26 @@ Result<void> HttpRequestHandler::ensureRoutingAndApplyBodyLimit_()
         }
 
         Result<UploadContext> up = location_routing_.getUploadContext();
-        if (up.isOk())
+        if (up.isOk() && !has_configured_body_store_for_upload_)
         {
             UploadContext ctx = up.unwrap();
-            if (!has_configured_body_store_for_upload_)
+            // Content-Type が multipart 以外の場合:
+            // - URL がファイル指定なら、そのまま destination に書き込む。
+            // - URL
+            // がディレクトリ指定なら、ファイル名を後で決める必要があるため
+            //   一時ファイルに保存し、RequestDispatcher 側で finalize する。
+            if (!ctx.request_target_is_directory &&
+                !ctx.request_leaf_name.empty())
             {
-                (void)body_store_.configureForUpload(
-                    ctx.destination_path.str(), ctx.allow_overwrite);
+                std::string dest = ctx.destination_dir.str();
+                if (!dest.empty() && dest[dest.size() - 1] != '/')
+                    dest += "/";
+                dest += ctx.request_leaf_name;
+                (void)body_store_.configureForUpload(dest, ctx.allow_overwrite);
+                has_configured_body_store_for_upload_ = true;
+            }
+            else
+            {
                 has_configured_body_store_for_upload_ = true;
             }
         }

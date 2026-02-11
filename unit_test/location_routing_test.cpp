@@ -367,9 +367,44 @@ TEST(LocationRouting, UploadStoreSelectsStoreBodyAndReturnsContext)
     utils::result::Result<server::UploadContext> up = r.getUploadContext();
     ASSERT_TRUE(up.isOk());
     EXPECT_EQ(up.unwrap().store_root.str(), store);
-    EXPECT_EQ(up.unwrap().destination_path.str(), store + "/file.txt");
+    EXPECT_EQ(up.unwrap().destination_dir.str(), store);
+    EXPECT_EQ(up.unwrap().request_leaf_name, std::string("file.txt"));
+    EXPECT_FALSE(up.unwrap().request_target_is_directory);
     EXPECT_TRUE(up.unwrap().allow_create_leaf);
     EXPECT_TRUE(up.unwrap().allow_overwrite);
+}
+
+TEST(LocationRouting, UploadStoreAllowsDirectoryTarget)
+{
+    const std::string root = makeTempDirOrDie_();
+    const std::string store = makeTempDirOrDie_();
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/upload").isOk());
+    ASSERT_TRUE(loc.setRootDir(root).isOk());
+    ASSERT_TRUE(loc.setUploadStore(store).isOk());
+    ASSERT_TRUE(loc.appendAllowedMethod(http::HttpMethod::POST).isOk());
+
+    server::VirtualServer vserver =
+        makeVirtualServerWithSingleLocation(loc, root, "8080");
+    const server::LocationDirective* matched =
+        vserver.findLocationByPath("/upload/");
+    ASSERT_TRUE(matched != NULL);
+
+    http::HttpRequest req = makePost_("/upload/", "example.com", 1, "0");
+    utils::result::Result<server::ResolvedRequestContext> ctx_res =
+        server::ResolvedRequestContext::create(req);
+    ASSERT_TRUE(ctx_res.isOk());
+    server::LocationRouting r(
+        &vserver, matched, ctx_res.unwrap(), req, http::HttpStatus::OK);
+
+    EXPECT_EQ(r.getNextAction(), server::STORE_BODY);
+    utils::result::Result<server::UploadContext> up = r.getUploadContext();
+    ASSERT_TRUE(up.isOk());
+    EXPECT_EQ(up.unwrap().store_root.str(), store);
+    EXPECT_EQ(up.unwrap().destination_dir.str(), store);
+    EXPECT_TRUE(up.unwrap().request_leaf_name.empty());
+    EXPECT_TRUE(up.unwrap().request_target_is_directory);
 }
 
 TEST(LocationRouting, AutoIndexContextContainsDirectoryPhysicalPath)

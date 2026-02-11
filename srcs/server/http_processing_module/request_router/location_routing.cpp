@@ -30,7 +30,9 @@ CgiContext::CgiContext()
 UploadContext::UploadContext()
     : store_root(),
       target_uri_path(),
-      destination_path(),
+      destination_dir(),
+      request_leaf_name(),
+      request_target_is_directory(false),
       allow_create_leaf(false),
       allow_overwrite(false)
 {
@@ -244,26 +246,56 @@ Result<UploadContext> LocationRouting::getUploadContext() const
 
     std::string rel =
         location_->removePathPatternFromPath(request_ctx_.getRequestPath());
-    if (rel.empty() || rel[rel.size() - 1] == '/')
-    {
-        return Result<UploadContext>(
-            utils::result::ERROR, UploadContext(), "upload target is invalid");
-    }
+    if (rel.empty())
+        rel = "/";
     if (rel[0] != '/')
-    {
         rel = "/" + rel;
+
+    // ディレクトリ指定("/upload/" など)も許可する。
+    ctx.request_target_is_directory =
+        (!rel.empty() && rel[rel.size() - 1] == '/');
+
+    std::string rel_dir = "/";
+    std::string leaf;
+    if (!ctx.request_target_is_directory)
+    {
+        std::string::size_type slash = rel.find_last_of('/');
+        if (slash == std::string::npos)
+        {
+            rel_dir = "/";
+            leaf = rel;
+        }
+        else
+        {
+            rel_dir = rel.substr(0, slash + 1);
+            leaf = rel.substr(slash + 1);
+        }
+    }
+    else
+    {
+        rel_dir = rel;
+        leaf.clear();
     }
 
-    Result<utils::path::PhysicalPath> dest =
-        utils::path::resolvePhysicalPathUnderRoot(ctx.store_root, rel, true);
-    if (dest.isError())
+    if (rel_dir.empty())
+        rel_dir = "/";
+    if (rel_dir[0] != '/')
+        rel_dir = "/" + rel_dir;
+    if (rel_dir[rel_dir.size() - 1] != '/')
+        rel_dir += "/";
+
+    Result<utils::path::PhysicalPath> dest_dir =
+        utils::path::resolvePhysicalPathUnderRoot(
+            ctx.store_root, rel_dir, false);
+    if (dest_dir.isError())
     {
         return Result<UploadContext>(
-            utils::result::ERROR, UploadContext(), dest.getErrorMessage());
+            utils::result::ERROR, UploadContext(), dest_dir.getErrorMessage());
     }
-    ctx.destination_path = dest.unwrap();
+    ctx.destination_dir = dest_dir.unwrap();
+    ctx.request_leaf_name = leaf;
     ctx.allow_create_leaf = true;
-    // 仕様変更: 同名ファイルがある場合は上書きする
+    // raw(body直書き) の URL 指定ファイルは上書きする（既存挙動互換）。
     ctx.allow_overwrite = true;
     return ctx;
 }

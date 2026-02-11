@@ -18,6 +18,9 @@ class Timestamp
     // エポック秒を HH:MM:SS に整形
     static std::string formatHmsFromEpochSeconds(long epoch_seconds);
 
+    // 現在時刻を YYYYMMDDHHMMSS で返す（アップロードファイル名用途）。
+    static std::string nowYmdHmsCompact();
+
    private:
     Timestamp();
     Timestamp(const Timestamp& other);

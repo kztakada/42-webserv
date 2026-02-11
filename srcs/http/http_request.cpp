@@ -1296,7 +1296,10 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
                     if (!w.isOk())
                     {
                         phase_ = kError;
-                        parse_error_status_ = HttpStatus::SERVER_ERROR;
+                        if (w.getErrorMessage() == "forbidden")
+                            parse_error_status_ = HttpStatus::FORBIDDEN;
+                        else
+                            parse_error_status_ = HttpStatus::SERVER_ERROR;
                         return Result<size_t>(ERROR, w.getErrorMessage());
                     }
                 }

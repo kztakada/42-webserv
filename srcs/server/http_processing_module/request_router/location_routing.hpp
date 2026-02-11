@@ -55,7 +55,12 @@ struct UploadContext
 {
     utils::path::PhysicalPath store_root;
     std::string target_uri_path;
-    utils::path::PhysicalPath destination_path;
+    // アップロード保存先ディレクトリ（upload_store 配下で解決された物理パス）
+    utils::path::PhysicalPath destination_dir;
+    // リクエストURIがファイル指定だった場合の leaf 名（例: "test.txt"）。
+    // ディレクトリ指定("/upload/" 等)の場合は空。
+    std::string request_leaf_name;
+    bool request_target_is_directory;
     bool allow_create_leaf;
     bool allow_overwrite;
 

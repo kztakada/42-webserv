@@ -11,6 +11,26 @@ namespace server
 
 using namespace utils::result;
 
+static std::string parentDir_(const std::string& path)
+{
+    const std::string::size_type pos = path.find_last_of('/');
+    if (pos == std::string::npos)
+        return ".";
+    if (pos == 0)
+        return "/";
+    return path.substr(0, pos);
+}
+
+static bool canCreateFileInDir_(const std::string& dir)
+{
+    return ::access(dir.c_str(), W_OK | X_OK) == 0;
+}
+
+static bool canWriteExistingFile_(const std::string& path)
+{
+    return ::access(path.c_str(), W_OK) == 0;
+}
+
 static Result<void> writeAll(int fd, const utils::Byte* data, size_t len)
 {
     if (len == 0)
@@ -108,6 +128,32 @@ Result<void> BodyStore::begin()
 {
     if (write_fd_ >= 0)
         return Result<void>();
+
+    // 事前に access() で書き込み可否を判定する（失敗後の errno
+    // 参照に頼らない）。 NOTE: TOCTTOU
+    // はあるが、HTTPステータス判断の安定化を優先する。
+    if (!path_.empty())
+    {
+        if (::access(path_.c_str(), F_OK) == 0)
+        {
+            if (allow_overwrite_)
+            {
+                if (!canWriteExistingFile_(path_))
+                    return Result<void>(ERROR, "forbidden");
+            }
+            else
+            {
+                // allow_overwrite=false かつ既存ファイルありは open(O_EXCL)
+                // で失敗想定。 ここでは権限ではないので forbidden にしない。
+            }
+        }
+        else
+        {
+            const std::string dir = parentDir_(path_);
+            if (!canCreateFileInDir_(dir))
+                return Result<void>(ERROR, "forbidden");
+        }
+    }
 
     int flags = O_WRONLY | O_CREAT;
     if (allow_overwrite_)

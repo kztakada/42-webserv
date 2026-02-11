@@ -701,7 +701,16 @@ echo "07 sample smoke checks passed."
 # --- 09_keep_alive ---
 run_sample sample/09_keep_alive/webserv.conf bash -lc '
   set -euo pipefail
+  chmod 755 sample/09_keep_alive/www/cgi/stream.py
   python3 sample/09_keep_alive/test_keep_alive.py
+'
+
+# --- 10_http1_0 ---
+run_sample sample/10_http1_0/webserv.conf bash -lc '
+  set -euo pipefail
+
+  chmod 755 sample/10_http1_0/www/cgi/stream.py
+  python3 sample/10_http1_0/test_http1_0.py
 '
 
 echo "All sample smoke checks passed."

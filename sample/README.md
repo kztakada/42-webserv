@@ -13,6 +13,8 @@ webserv の手動動作確認（`curl`）用のサンプル設定と素材置き
 - `04_cgi/`: CGI（python/php/node/bash、stdinに\0を含むPOST、client_max_body_size超過の413 など）
 - `05_upload_store/`: upload_store（保存先、client_max_body_size のデフォルト/継承/上書き、境界、multipart の edge、書き込み不可 403 など）
 - `06_cookie/`: CGI Cookie（Cookie->HTTP_COOKIE、Set-Cookie転送、2回アクセスでID保持）
+- `09_keep_alive/`: keep-alive（同一接続での連続リクエスト、CRLF単体で応答しない）
+- `10_http1_0/`: HTTP/1.0 互換（chunked禁止、close/keep-alive、CGIの不定長レスポンスはclose終端）
 
 ## smoke test
 

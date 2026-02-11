@@ -73,12 +73,8 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
         ctx.request, cgi_ctx.script_name, cgi_ctx.path_info);
 
     meta.setServerName(ctx.socket_fd.getServerIp().toString());
-    {
-        std::istringstream iss(ctx.socket_fd.getServerPort().toString());
-        unsigned int p = 0;
-        iss >> p;
-        meta.setServerPort(p);
-    }
+    meta.setServerPort(ctx.socket_fd.getServerPort().toNumber());
+
     meta.setRemoteAddr(ctx.socket_fd.getClientIp().toString());
     meta.setServerSoftware("webserv");
 

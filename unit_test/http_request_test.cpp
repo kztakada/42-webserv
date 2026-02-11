@@ -120,7 +120,7 @@ TEST(HttpRequest, RejectsUnsupportedMethodsWith501)
         "OPTIONS",
         "PATCH",
         "TRACE",
-        "CONNECT", // CONNECT も現状は未対応扱い
+        "CONNECT",  // CONNECT も現状は未対応扱い
     };
 
     for (size_t i = 0; i < sizeof(kUnsupportedMethods) / sizeof(char*); ++i)
@@ -557,6 +557,21 @@ TEST(HttpRequest, RejectsUnsupportedTransferCoding)
         "POST / HTTP/1.1\r\n"
         "Host: example.com\r\n"
         "Transfer-Encoding: gzip, chunked\r\n"
+        "\r\n");
+
+    utils::result::Result<size_t> r = req.parse(buf);
+    EXPECT_FALSE(r.isOk());
+    EXPECT_TRUE(req.hasParseError());
+    EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus());
+}
+
+TEST(HttpRequest, RejectsTransferEncodingWithoutChunked)
+{
+    http::HttpRequest req;
+    std::vector<utils::Byte> buf = toBytes(
+        "POST / HTTP/1.1\r\n"
+        "Host: example.com\r\n"
+        "Transfer-Encoding: gzip\r\n"
         "\r\n");
 
     utils::result::Result<size_t> r = req.parse(buf);

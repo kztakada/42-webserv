@@ -393,7 +393,8 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
     // client_max_body_size: Content-Length がある場合だけ先に判定する。
     // chunked/不明は Session 側で受信中に enforce する想定。
     unsigned long max_body = location_->clientMaxBodySize();
-    if (req.hasHeader("Content-Length"))
+    // RFC 9112: Transfer-Encoding が存在する場合は Content-Length を無視する。
+    if (!req.hasHeader("Transfer-Encoding") && req.hasHeader("Content-Length"))
     {
         Result<const std::vector<std::string>&> h =
             req.getHeader("Content-Length");

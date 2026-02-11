@@ -315,6 +315,46 @@ TEST(LocationRouting, PayloadTooLargeByContentLength)
     EXPECT_EQ(r.getHttpStatus().getCode(), 413u);
 }
 
+TEST(LocationRouting, IgnoresContentLengthWhenTransferEncodingExists)
+{
+    const std::string store = makeTempDirOrDie_();
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/upload").isOk());
+    ASSERT_TRUE(loc.setRootDir("/var/www").isOk());
+    ASSERT_TRUE(loc.setUploadStore(store).isOk());
+    ASSERT_TRUE(loc.appendAllowedMethod(http::HttpMethod::POST).isOk());
+    ASSERT_TRUE(loc.setClientMaxBodySize(3).isOk());
+
+    server::VirtualServer vserver =
+        makeVirtualServerWithSingleLocation(loc, "/var/www", "8080");
+    const server::LocationDirective* matched =
+        vserver.findLocationByPath("/upload/file.txt");
+    ASSERT_TRUE(matched != NULL);
+
+    // Transfer-Encoding がある場合、Content-Length は無視される。
+    // ここでは Content-Length を大きくしても、ルーティング段階で 413 にしない。
+    std::ostringstream oss;
+    oss << "POST /upload/file.txt HTTP/1.1\r\n";
+    oss << "Host: example.com\r\n";
+    oss << "Transfer-Encoding: chunked\r\n";
+    oss << "Content-Length: 10\r\n";
+    oss << "\r\n";
+    oss << "2\r\n";
+    oss << "xx\r\n";
+    oss << "0\r\n\r\n";
+
+    http::HttpRequest req = mustParseRequest_(oss.str());
+    utils::result::Result<server::ResolvedRequestContext> ctx_res =
+        server::ResolvedRequestContext::create(req);
+    ASSERT_TRUE(ctx_res.isOk());
+    server::LocationRouting r(
+        &vserver, matched, ctx_res.unwrap(), req, http::HttpStatus::OK);
+
+    EXPECT_EQ(r.getNextAction(), server::STORE_BODY);
+    EXPECT_EQ(r.getHttpStatus().getCode(), 200u);
+}
+
 TEST(LocationRouting, MethodNotAllowedBecomes405)
 {
     server::LocationDirectiveConf loc;

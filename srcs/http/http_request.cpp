@@ -772,11 +772,6 @@ Result<void> HttpRequest::validateHeaders(bool skip_body_size_check)
                 return Result<void>(ERROR, "unsupported transfer-coding");
             }
         }
-        if (!has_chunked)
-        {
-            parse_error_status_ = HttpStatus::NOT_IMPLEMENTED;
-            return Result<void>(ERROR, "Transfer-Encoding without chunked");
-        }
 
         body_framing_ = kChunked;
         return Result<void>();

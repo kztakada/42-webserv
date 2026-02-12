@@ -133,24 +133,13 @@ Result<AutoIndexContext> LocationRouting::getAutoIndexContext() const
             utils::result::ERROR, AutoIndexContext(), "uri is empty");
     }
 
-    // NOTE: 本プロジェクトの仕様として、location 直下（pattern と同一URI）への
-    // 末尾'/'なしアクセスはリダイレクトせず、ディレクトリとして index
-    // 探索する。 ただし /directory/Yeah のように location
-    // 配下の子要素については、 末尾'/'が無い場合はディレクトリ扱いしない（=
-    // autoindex context を返さない）。
-    std::string uri = uri_raw;
-    if (uri[uri.size() - 1] != '/')
-    {
-        std::string under = location_->removePathPatternFromPath(uri_raw);
-        if (!under.empty())
-        {
-            return Result<AutoIndexContext>(utils::result::ERROR,
-                AutoIndexContext(), "uri is not a directory path");
-        }
-        uri += "/";
-    }
+    // 末尾'/'の有無に関わらず、実体がディレクトリなら index/autoindex 探索の
+    // 文脈を作れるようにする。実体がファイルの場合はディレクトリ扱いしない。
+    const bool has_trailing_slash = (uri_raw[uri_raw.size() - 1] == '/');
+    const std::string uri_dir = has_trailing_slash ? uri_raw : (uri_raw + "/");
 
-    std::string uri_under_location = location_->removePathPatternFromPath(uri);
+    std::string uri_under_location =
+        location_->removePathPatternFromPath(uri_dir);
     if (uri_under_location.empty())
     {
         uri_under_location = "/";
@@ -169,12 +158,26 @@ Result<AutoIndexContext> LocationRouting::getAutoIndexContext() const
             AutoIndexContext(), dir_physical.getErrorMessage());
     }
 
+    const utils::path::PhysicalPath dir = dir_physical.unwrap();
+    struct stat st;
+    if (::stat(dir.str().c_str(), &st) != 0)
+    {
+        return Result<AutoIndexContext>(
+            utils::result::ERROR, AutoIndexContext(), "stat failed");
+    }
+    if (!S_ISDIR(st.st_mode))
+    {
+        return Result<AutoIndexContext>(utils::result::ERROR,
+            AutoIndexContext(), "uri is not a directory path");
+    }
+
     AutoIndexContext ctx;
-    ctx.directory_path = dir_physical.unwrap();
-    ctx.uri_dir_path = uri;
+    ctx.directory_path = dir;
+    ctx.uri_dir_path = uri_dir;
     ctx.autoindex_enabled = location_->isAutoIndexEnabled();
 
-    std::vector<std::string> cands = location_->buildIndexCandidatePaths(uri);
+    std::vector<std::string> cands =
+        location_->buildIndexCandidatePaths(uri_dir);
     ctx.index_candidates.reserve(cands.size());
     for (size_t i = 0; i < cands.size(); ++i)
     {

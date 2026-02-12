@@ -90,6 +90,14 @@ run_sample sample/42_test/webserv.conf bash -lc '
   echo "$resp" | grep -q "helllooooooo!"
 '
 
+# case04
+run_sample sample/42_test/webserv.conf bash -lc '
+  set -e
+  resp=$(curl -sS -i http://127.0.0.1:8080/directory/nop)
+  echo "$resp" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$resp" | grep -q "helllooooooo!"
+'
+
 # --- 01_static ---
 run_sample sample/01_static/webserv.conf bash -lc '
   set -e

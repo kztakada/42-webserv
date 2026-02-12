@@ -188,23 +188,8 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
     if (S_ISDIR(st.st_mode))
     {
         const std::string& uri = state->current.getPath();
-        if (!uri.empty() && uri[uri.size() - 1] != '/')
-        {
-            // RFC的には末尾スラッシュを付けるためのリダイレクト。
-            Result<void> s =
-                out_response.setStatus(http::HttpStatus::MOVED_PERMANENTLY);
-            if (s.isError())
-                return Result<HandlerResult>(ERROR, s.getErrorMessage());
-            Result<void> h = out_response.setHeader("Location", uri + "/");
-            if (h.isError())
-                return Result<HandlerResult>(ERROR, h.getErrorMessage());
-
-            HandlerResult res;
-            (void)out_response.setExpectedContentLength(0);
-            res.output.body_source.reset(NULL);
-            res.output.should_close_connection = false;
-            return res;
-        }
+        const bool has_trailing_slash =
+            (!uri.empty() && uri[uri.size() - 1] == '/');
 
         // index candidates を探す
         Result<AutoIndexContext> ai = route.getAutoIndexContext();
@@ -279,11 +264,15 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
             }
         }
 
-        // index が無く、autoindex も無効の場合は 403
+        // index が無く、autoindex も無効の場合は 403。
+        // ただし末尾'/'なしの要求は「ファイルとしての要求」とみなし、
+        // ディレクトリに index が無い場合は 404 を返す（42_test の期待）。
+        const http::HttpStatus final_status = has_trailing_slash
+                                                  ? http::HttpStatus::FORBIDDEN
+                                                  : http::HttpStatus::NOT_FOUND;
         http::HttpRequest next;
         if (tryInternalRedirect_(internal_redirect_, router_, server_ip,
-                server_port, state->current, http::HttpStatus::FORBIDDEN, state,
-                &next))
+                server_port, state->current, final_status, state, &next))
         {
             HandlerResult res;
             res.should_continue = true;
@@ -292,7 +281,7 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
         }
 
         Result<RequestProcessorOutput> r =
-            error_renderer_.respond(http::HttpStatus::FORBIDDEN, out_response);
+            error_renderer_.respond(final_status, out_response);
         if (r.isError())
             return Result<HandlerResult>(ERROR, r.getErrorMessage());
         HandlerResult res;

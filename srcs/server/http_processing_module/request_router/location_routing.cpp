@@ -126,11 +126,28 @@ Result<AutoIndexContext> LocationRouting::getAutoIndexContext() const
             utils::result::ERROR, AutoIndexContext(), "no location matched");
     }
 
-    const std::string& uri = request_ctx_.getRequestPath();
-    if (uri.empty() || uri[uri.size() - 1] != '/')
+    const std::string& uri_raw = request_ctx_.getRequestPath();
+    if (uri_raw.empty())
     {
-        return Result<AutoIndexContext>(utils::result::ERROR,
-            AutoIndexContext(), "uri is not a directory path");
+        return Result<AutoIndexContext>(
+            utils::result::ERROR, AutoIndexContext(), "uri is empty");
+    }
+
+    // NOTE: 本プロジェクトの仕様として、location 直下（pattern と同一URI）への
+    // 末尾'/'なしアクセスはリダイレクトせず、ディレクトリとして index
+    // 探索する。 ただし /directory/Yeah のように location
+    // 配下の子要素については、 末尾'/'が無い場合はディレクトリ扱いしない（=
+    // autoindex context を返さない）。
+    std::string uri = uri_raw;
+    if (uri[uri.size() - 1] != '/')
+    {
+        std::string under = location_->removePathPatternFromPath(uri_raw);
+        if (!under.empty())
+        {
+            return Result<AutoIndexContext>(utils::result::ERROR,
+                AutoIndexContext(), "uri is not a directory path");
+        }
+        uri += "/";
     }
 
     std::string uri_under_location = location_->removePathPatternFromPath(uri);

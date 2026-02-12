@@ -485,8 +485,11 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
             request_ctx_.getRequestPath(), &exec, &ext, &end);
         if (end != std::string::npos)
         {
-            // script の実体がなければ 404（CGI
-            // 実行エラーではなくリソース未存在）
+            // cgi_extension
+            // は「拡張子に応じて特定の実行プログラムを起動する」ため、 request
+            // path 上の script 実体の存在/実行権限で CGI を抑止しない。
+            // ただし、root 配下に留まる/ドットセグメント拒否等の安全性のため、
+            // 物理パス解決はこの段階で検証しておく。
             const std::string uri_path = request_ctx_.getRequestPath();
             const std::string script_name = uri_path.substr(0, end);
 
@@ -507,23 +510,6 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
             if (script_physical.isError())
             {
                 status_ = http::HttpStatus::BAD_REQUEST;
-                return applyErrorPageOrRespondError_();
-            }
-
-            struct stat st;
-            if (::stat(script_physical.unwrap().str().c_str(), &st) != 0 ||
-                !S_ISREG(st.st_mode))
-            {
-                status_ = http::HttpStatus::NOT_FOUND;
-                return applyErrorPageOrRespondError_();
-            }
-
-            // CGI script の実体はあるが実行権限が無い場合は 403。
-            // interpreter (/usr/bin/python3 など) に渡す設計でも、仕様として
-            // X_OK を要求する。
-            if (::access(script_physical.unwrap().str().c_str(), X_OK) != 0)
-            {
-                status_ = http::HttpStatus::FORBIDDEN;
                 return applyErrorPageOrRespondError_();
             }
 

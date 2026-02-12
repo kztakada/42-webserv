@@ -69,8 +69,16 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
             request_body_fd = fd.unwrap();
     }
 
+    // cgi_extension は「拡張子に応じて特定の実行プログラムを起動する」ため、
+    // SCRIPT_NAME は URI 上の CGI スクリプトを指さない（実行プログラム自体は
+    // URI に現れない）。 そのため、PATH_INFO に request path 全体（query
+    // を除く）を入れる。
+    // - ルーティングで分解した script_name + path_info は、query を除いた
+    // request path 全体になる。
+    const std::string full_request_path =
+        cgi_ctx.script_name + cgi_ctx.path_info;
     http::CgiMetaVariables meta = http::CgiMetaVariables::fromHttpRequest(
-        ctx.request, cgi_ctx.script_name, cgi_ctx.path_info);
+        ctx.request, "", full_request_path);
 
     meta.setServerName(ctx.socket_fd.getServerIp().toString());
     meta.setServerPort(ctx.socket_fd.getServerPort().toNumber());
@@ -83,6 +91,8 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
     env["QUERY_STRING"] = cgi_ctx.query_string;
     if (isPhpCgiExecutor_(cgi_ctx.executor_path.str()))
         env["REDIRECT_STATUS"] = "200";
+
+    // PATH_INFO / SCRIPT_NAME は CgiMetaVariables 側で設定済み。
 
     std::vector<std::string> args;
     args.push_back(cgi_ctx.script_filename.str());

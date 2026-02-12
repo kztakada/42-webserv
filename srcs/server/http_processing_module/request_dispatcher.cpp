@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -14,6 +16,7 @@
 #include "server/session/fd_session/http_session/actions/execute_cgi_action.hpp"
 #include "server/session/fd_session/http_session/actions/process_request_action.hpp"
 #include "server/session/fd_session/http_session/actions/send_error_action.hpp"
+#include "server/session/fd_session/http_session/body_store.hpp"
 #include "server/session/fd_session/http_session/session_context.hpp"
 #include "utils/log.hpp"
 #include "utils/timestamp.hpp"
@@ -28,6 +31,24 @@ namespace
 static bool canWriteToDir_(const std::string& dir)
 {
     return ::access(dir.c_str(), W_OK | X_OK) == 0;
+}
+
+static Result<int> openBodyStoreForReadAllowEmpty_(BodyStore& body_store)
+{
+    Result<int> fd = body_store.openForRead();
+    if (fd.isOk())
+        return fd;
+
+    // Content-Length: 0 等で body_store が一度も open されず、
+    // 一時ファイルが未作成な場合がある。その場合も空ファイルとして扱える。
+    if (body_store.size() != 0)
+        return fd;
+
+    Result<void> b = body_store.begin();
+    if (b.isError())
+        return Result<int>(ERROR, -1, b.getErrorMessage());
+    (void)body_store.finish();
+    return body_store.openForRead();
 }
 
 static Result<void> writeAll_(int fd, const std::string& data)
@@ -662,7 +683,10 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
                 if (out_fd < 0)
                 {
                     ::close(in_fd);
-                    return Result<void>(ERROR, "open() failed");
+                    std::ostringstream oss;
+                    oss << "open() failed: " << out_path << ": "
+                        << std::strerror(errno);
+                    return Result<void>(ERROR, oss.str());
                 }
             }
 
@@ -695,7 +719,8 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
     if (uctx.request_target_is_directory)
     {
         (void)ctx.request_handler.bodyStore().finish();
-        Result<int> in_fd_r = ctx.request_handler.bodyStore().openForRead();
+        Result<int> in_fd_r =
+            openBodyStoreForReadAllowEmpty_(ctx.request_handler.bodyStore());
         if (in_fd_r.isError())
             return Result<void>(ERROR, in_fd_r.getErrorMessage());
         int in_fd = in_fd_r.unwrap();
@@ -711,7 +736,10 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
         if (out_fd < 0)
         {
             ::close(in_fd);
-            return Result<void>(ERROR, "open() failed");
+            std::ostringstream oss;
+            oss << "open() failed: " << out_path << ": "
+                << std::strerror(errno);
+            return Result<void>(ERROR, oss.str());
         }
         Result<void> c = copyFdToFd_(in_fd, out_fd);
         ::close(out_fd);

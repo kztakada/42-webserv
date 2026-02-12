@@ -231,18 +231,17 @@ TEST(RequestProcessor, ProcessErrorAppliesErrorPageAndPreserves500)
     (void)root;
 }
 
-TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
+TEST(RequestProcessor, UnsupportedMethodReturns405AndAppliesErrorPage)
 {
     const std::string root = makeTempDirOrDie_();
     mkdirOrDie_(root + "/errors");
-    writeFileOrDie_(root + "/errors/501.html", "Custom501");
+    writeFileOrDie_(root + "/errors/405.html", "Custom405");
 
     server::VirtualServerConf vs;
     ASSERT_TRUE(vs.appendListen("", "8080").isOk());
     ASSERT_TRUE(vs.setRootDir(root).isOk());
     ASSERT_TRUE(
-        vs.appendErrorPage(
-              http::HttpStatus::NOT_IMPLEMENTED, "/errors/501.html")
+        vs.appendErrorPage(http::HttpStatus::NOT_ALLOWED, "/errors/405.html")
             .isOk());
 
     server::LocationDirectiveConf loc;
@@ -265,40 +264,41 @@ TEST(RequestProcessor, UnsupportedMethodReturns501AndAppliesErrorPage)
     server::RequestProcessor proc(router);
 
     const std::string methods[] = {
-        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE",
-        "FOO"  // unknown but valid token
-    };
+        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE", "FOO"};
 
     for (size_t i = 0; i < (sizeof(methods) / sizeof(methods[0])); ++i)
     {
-        // 手動パース（501エラーになることを許容する）
+        // 未対応メソッドでもパース自体は成功する。
         http::HttpRequest req;
-        std::string raw = methods[i] + std::string(
+        std::string raw =
+            methods[i] + std::string(
                              " /any HTTP/1.1\r\nHost: "
                              "example.com\r\nContent-Length: 0\r\n\r\n");
         std::vector<utils::Byte> buf = toBytes_(raw);
-        req.parse(buf);
+        utils::result::Result<size_t> parsed = req.parse(buf);
+        ASSERT_TRUE(parsed.isOk());
+        ASSERT_TRUE(req.isParseComplete());
+        ASSERT_FALSE(req.hasParseError());
 
-        // HttpRequestは未対応メソッドに対して即座に501エラーを返す仕様になったため、
-        // hasParseError() が true になるはず。
-        EXPECT_TRUE(req.hasParseError());
-        EXPECT_EQ(req.getParseErrorStatus(), http::HttpStatus::NOT_IMPLEMENTED);
-
-        // パースエラーの場合は通常 process() ではなく processError() が呼ばれるフローになる。
-        // ここでは 501 エラーが発生したと仮定して processError を呼ぶ。
+        // 通常フローは process()。
         http::HttpResponse resp;
         utils::result::Result<server::RequestProcessor::Output> out =
-            proc.processError(req, ip.unwrap(), port.unwrap(),
-                http::HttpStatus::NOT_IMPLEMENTED, resp);
+            proc.process(req, ip.unwrap(), port.unwrap(), resp);
         ASSERT_TRUE(out.isOk());
 
-        EXPECT_EQ(resp.getStatus().getCode(), 501u);
+        EXPECT_EQ(resp.getStatus().getCode(), 405u);
+        ASSERT_TRUE(resp.hasHeader("Allow"));
+        utils::result::Result<const std::vector<std::string>&> allow =
+            resp.getHeader("Allow");
+        ASSERT_TRUE(allow.isOk());
+        ASSERT_FALSE(allow.unwrap().empty());
+        EXPECT_NE(allow.unwrap()[0].find("GET"), std::string::npos);
+
         server::RequestProcessor::Output o = out.unwrap();
         ASSERT_TRUE(o.body_source.get() != NULL);
 
         std::string body = readAll_(o.body_source.get());
-        // Custom501 はパスがパースできないため取得できない（デフォルトエラーページになる）
-        EXPECT_NE(body.find("501 Not Implemented"), std::string::npos);
+        EXPECT_EQ(body, std::string("Custom405"));
     }
 
     (void)root;

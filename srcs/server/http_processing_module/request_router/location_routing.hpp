@@ -79,6 +79,10 @@ class LocationRouting
     ActionType getNextAction() const;
     http::HttpStatus getHttpStatus() const;
 
+    // 405 Method Not Allowed の Allow ヘッダー値（"GET, POST" 等）。
+    // location が存在しない場合は ERROR。
+    Result<std::string> getAllowHeaderValue() const;
+
     // REDIRECT_EXTERNAL のときは URL、REDIRECT_INTERNAL のときは URI。
     Result<std::string> getRedirectLocation() const;
 

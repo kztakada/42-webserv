@@ -20,6 +20,15 @@ Result<HandlerResult> RespondErrorHandler::handle(const LocationRouting& route,
     if (r.isError())
         return Result<HandlerResult>(ERROR, r.getErrorMessage());
 
+    if (route.getHttpStatus() == http::HttpStatus::NOT_ALLOWED)
+    {
+        Result<std::string> allow = route.getAllowHeaderValue();
+        if (allow.isOk() && !allow.unwrap().empty())
+        {
+            (void)out_response.setHeader("Allow", allow.unwrap());
+        }
+    }
+
     HandlerResult res;
     res.output = r.unwrap();
     return res;

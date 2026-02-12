@@ -25,6 +25,18 @@ Result<HandlerResult> InternalRedirectHandler::handle(
         state->preserved_error_status = route.getHttpStatus();
     }
 
+    // 405 の場合は Allow ヘッダーも維持する。
+    if (!state->has_preserved_allow_header &&
+        route.getHttpStatus() == http::HttpStatus::NOT_ALLOWED)
+    {
+        Result<std::string> allow = route.getAllowHeaderValue();
+        if (allow.isOk() && !allow.unwrap().empty())
+        {
+            state->has_preserved_allow_header = true;
+            state->preserved_allow_header_value = allow.unwrap();
+        }
+    }
+
     Result<http::HttpRequest> r = route.getInternalRedirectRequest();
     if (r.isError())
         return Result<HandlerResult>(ERROR, r.getErrorMessage());

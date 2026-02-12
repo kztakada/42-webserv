@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euo pipefail # エラーが起きたら即座にスクリプトを止める(失敗/未定義変数の参照/パイプライン中のエラー)
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." # webserv/へ移動
 
+# 必須コマンドの存在確認
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required" >&2
   exit 1
@@ -36,10 +37,10 @@ fi
 
 run_sample() {
   local config="$1"; shift
-  local log="/tmp/webserv_sample_$$.log"
+  local log="/tmp/webserv_sample_$$.log" # webserv起動後のstd_outを/tmpにlogとして保存する
 
   ./webserv "$config" >"$log" 2>&1 &
-  local pid=$!
+  local pid=$! # バックグラウンド実行pid
 
   cleanup() {
     if [ -n "${pid:-}" ]; then
@@ -47,10 +48,10 @@ run_sample() {
       wait "$pid" 2>/dev/null || true
     fi
   }
-  trap cleanup EXIT INT TERM
+  trap cleanup EXIT INT TERM # cleanupトラップ
 
   sleep 0.2
-  if ! kill -0 "$pid" 2>/dev/null; then
+  if ! kill -0 "$pid" 2>/dev/null; then # webserv生存確認
     echo "webserv exited early for $config" >&2
     cat "$log" >&2 || true
     trap - EXIT INT TERM
@@ -60,9 +61,26 @@ run_sample() {
 
   "$@"
 
-  trap - EXIT INT TERM
+  trap - EXIT INT TERM # cleanupトラップ終了
   cleanup
 }
+
+
+
+# --- 42_test ---
+# case01
+run_sample sample/42_test/webserv.conf bash -lc '
+  set -e
+  resp=$(curl -sS -I http://127.0.0.1:8080/)
+  echo "$resp" | head -n1 | grep -Eq "^HTTP/1\\.[01] 405"
+  echo "$resp" | grep -qi "Allow: GET"
+'
+# case02
+run_sample sample/42_test/webserv.conf bash -lc '
+  set -e
+  resp=$(curl -sS -i http://127.0.0.1:8080/directory/Yeah)
+  echo "$resp" | head -n1 | grep -Eq "^HTTP/1\\.[01] 404"
+'
 
 # --- 01_static ---
 run_sample sample/01_static/webserv.conf bash -lc '

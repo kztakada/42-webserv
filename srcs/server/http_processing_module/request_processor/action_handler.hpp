@@ -1,6 +1,8 @@
 #ifndef WEBSERV_ACTION_HANDLER_HPP_
 #define WEBSERV_ACTION_HANDLER_HPP_
 
+#include <string>
+
 #include "http/http_request.hpp"
 #include "http/http_response.hpp"
 #include "server/http_processing_module/request_processor/request_processor_output.hpp"
@@ -16,10 +18,15 @@ struct ProcessingState
     bool has_preserved_error_status;
     http::HttpStatus preserved_error_status;
 
+    bool has_preserved_allow_header;
+    std::string preserved_allow_header_value;
+
     explicit ProcessingState(const http::HttpRequest& request)
         : current(request),
           has_preserved_error_status(false),
-          preserved_error_status(http::HttpStatus::OK)
+          preserved_error_status(http::HttpStatus::OK),
+          has_preserved_allow_header(false),
+          preserved_allow_header_value()
     {
     }
 };

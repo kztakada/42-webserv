@@ -57,6 +57,9 @@ class LocationDirective
 
     // ビジネスロジック
     bool isMethodAllowed(const http::HttpMethod& method) const;
+    // RFC 9110 Section 10.2.6 (405) の Allow ヘッダー値を生成する。
+    // allow_methods で設定されたメソッドを ", " で連結する。
+    std::string buildAllowHeaderValue() const;
     size_t pathPatternLength() const;
     bool isMatchPattern(const std::string& path) const;
 
@@ -70,6 +73,11 @@ class LocationDirective
     // location : /cgi-bin
     // -> /test-cgi/hoge/fuga
     std::string removePathPatternFromPath(const std::string& path) const;
+
+    // root の継承/上書きに関係なく、location のパターンを除去する。
+    // 主に upload_store の保存先を「location 配下の相対パス」として
+    // 解決したい用途で使う。
+    std::string stripPathPatternFromPath(const std::string& path) const;
 
     // 互換用（呼び出し側移行までの暫定）
     bool isAllowed(const http::HttpMethod& method) const;

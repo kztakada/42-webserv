@@ -5,13 +5,6 @@ namespace server
 using http::HttpStatus;
 using utils::result::Result;
 
-static bool isServerSupportedMethod_(const http::HttpMethod& method)
-{
-    return method == http::HttpMethod::GET ||
-           method == http::HttpMethod::POST ||
-           method == http::HttpMethod::DELETE;
-}
-
 RequestRouter::RequestRouter(const ServerConfig& config) : servers_()
 {
     servers_.reserve(config.servers.size());
@@ -73,13 +66,11 @@ Result<LocationRouting> RequestRouter::route(const http::HttpRequest& request,
     const LocationDirective* location =
         selectLocationByPath(resolved.getRequestPath(), vserver);
 
-    http::HttpStatus status = HttpStatus::OK;
-    if (!isServerSupportedMethod_(request.getMethod()))
-    {
-        status = HttpStatus::NOT_IMPLEMENTED;
-    }
-
-    return LocationRouting(vserver, location, resolved, request, status);
+    // サーバーが実装していないメソッド（例: HEAD, PUT）も、
+    // リクエスト自体が文法的に正しければ 405 + Allow で返す仕様にする。
+    // そのためメソッドのサポート可否はここでは判定しない。
+    return LocationRouting(
+        vserver, location, resolved, request, HttpStatus::OK);
 }
 
 const VirtualServer* RequestRouter::selectVirtualServer(

@@ -60,6 +60,16 @@ Result<RequestProcessor::Output> RequestProcessor::process(
             state.current = result.next_request;
             continue;
         }
+
+        // error_page の内部リダイレクト等で 405 を保持している場合、
+        // 最終レスポンスに Allow を付与する。
+        if (state.has_preserved_allow_header &&
+            !state.preserved_allow_header_value.empty() &&
+            !out_response.hasHeader("Allow"))
+        {
+            (void)out_response.setHeader(
+                "Allow", state.preserved_allow_header_value);
+        }
         return result.output;
     }
 
@@ -94,6 +104,17 @@ Result<RequestProcessor::Output> RequestProcessor::processError(
                         // コンテンツは内部URIの結果を使い、ステータスだけ元の
                         // エラーに戻す。
                         (void)out_response.setStatus(error_status);
+
+                        if (error_status == http::HttpStatus::NOT_ALLOWED)
+                        {
+                            Result<std::string> allow =
+                                route.getAllowHeaderValue();
+                            if (allow.isOk() && !allow.unwrap().empty())
+                            {
+                                (void)out_response.setHeader(
+                                    "Allow", allow.unwrap());
+                            }
+                        }
                         return pr.unwrap();
                     }
                 }
@@ -102,7 +123,18 @@ Result<RequestProcessor::Output> RequestProcessor::processError(
     }
 
     out_response.reset();
-    return error_renderer_.respond(error_status, out_response);
+    Result<Output> r = error_renderer_.respond(error_status, out_response);
+    if (r.isOk() && error_status == http::HttpStatus::NOT_ALLOWED &&
+        route_result.isOk())
+    {
+        LocationRouting route = route_result.unwrap();
+        Result<std::string> allow = route.getAllowHeaderValue();
+        if (allow.isOk() && !allow.unwrap().empty())
+        {
+            (void)out_response.setHeader("Allow", allow.unwrap());
+        }
+    }
+    return r;
 }
 
 }  // namespace server

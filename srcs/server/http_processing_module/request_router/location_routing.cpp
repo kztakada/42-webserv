@@ -68,6 +68,16 @@ ActionType LocationRouting::getNextAction() const { return next_action_; }
 
 http::HttpStatus LocationRouting::getHttpStatus() const { return status_; }
 
+Result<std::string> LocationRouting::getAllowHeaderValue() const
+{
+    if (location_ == NULL)
+    {
+        return Result<std::string>(
+            utils::result::ERROR, std::string(), "location is null");
+    }
+    return Result<std::string>(location_->buildAllowHeaderValue());
+}
+
 Result<std::string> LocationRouting::getRedirectLocation() const
 {
     if (next_action_ != REDIRECT_EXTERNAL && next_action_ != REDIRECT_INTERNAL)
@@ -245,7 +255,7 @@ Result<UploadContext> LocationRouting::getUploadContext() const
     ctx.target_uri_path = request_ctx_.getRequestPath();
 
     std::string rel =
-        location_->removePathPatternFromPath(request_ctx_.getRequestPath());
+        location_->stripPathPatternFromPath(request_ctx_.getRequestPath());
     if (rel.empty())
         rel = "/";
     if (rel[0] != '/')

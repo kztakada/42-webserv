@@ -111,30 +111,35 @@ TEST(HttpRequest, ParsesSupportedMethods)
     }
 }
 
-// GET/POST/DELETE 以外は 501 Not Implemented
-TEST(HttpRequest, RejectsUnsupportedMethodsWith501)
+// 未対応メソッドでも、リクエストライン/ヘッダーの文法が正しければパース自体は成功する。
+// 405 + Allow はルーティング/レスポンス層で扱う。
+TEST(HttpRequest, ParsesUnsupportedMethodsWithoutParseError)
 {
-    const char* kUnsupportedMethods[] = {
-        "PUT",
-        "HEAD",
-        "OPTIONS",
-        "PATCH",
-        "TRACE",
-        "CONNECT",  // CONNECT も現状は未対応扱い
+    const char* kMethods[] = {
+        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT",
+        "FOO"  // unknown but valid token
     };
 
-    for (size_t i = 0; i < sizeof(kUnsupportedMethods) / sizeof(char*); ++i)
+    for (size_t i = 0; i < sizeof(kMethods) / sizeof(char*); ++i)
     {
         http::HttpRequest req;
-        std::string raw = std::string(kUnsupportedMethods[i]) +
-                          " /test HTTP/1.1\r\n" + "Host: example.com\r\n\r\n";
+        const std::string method = kMethods[i];
+        std::string target = "/test";
+        if (method == "CONNECT")
+        {
+            target = "example.com:443";
+        }
+
+        std::string raw = method + " " + target + " HTTP/1.1\r\n" +
+                          "Host: example.com\r\n" + "Content-Length: 0\r\n\r\n";
         std::vector<utils::Byte> buf = toBytes(raw.c_str());
         utils::result::Result<size_t> r = req.parse(buf);
 
-        EXPECT_FALSE(r.isOk()) << kUnsupportedMethods[i];
-        EXPECT_TRUE(req.hasParseError()) << kUnsupportedMethods[i];
-        EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus())
-            << kUnsupportedMethods[i];
+        EXPECT_TRUE(r.isOk()) << kMethods[i];
+        EXPECT_EQ(buf.size(), r.unwrap()) << kMethods[i];
+        EXPECT_TRUE(req.isParseComplete()) << kMethods[i];
+        EXPECT_FALSE(req.hasParseError()) << kMethods[i];
+        EXPECT_EQ(method, req.getMethodString()) << kMethods[i];
     }
 }
 
@@ -157,30 +162,38 @@ TEST(HttpRequest, ParsesAbsoluteFormTarget)
     EXPECT_EQ(std::string("name=bob"), req.getQueryString());
 }
 
-// CONNECT: authority-form はメソッドが CONNECT だが未対応なので 501
-TEST(HttpRequest, RejectsConnectAuthorityFormTarget)
+// CONNECT: authority-form
+// も文法としてはパースできる（未対応はルーティング層で扱う）
+TEST(HttpRequest, ParsesConnectAuthorityFormTarget)
 {
     http::HttpRequest req;
     std::vector<utils::Byte> buf = toBytes(
         "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com\r\n\r\n");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_FALSE(r.isOk());
-    EXPECT_TRUE(req.hasParseError());
-    EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus());
+    EXPECT_TRUE(r.isOk());
+    EXPECT_EQ(buf.size(), r.unwrap());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.hasParseError());
+    EXPECT_EQ(http::HttpMethod::CONNECT, req.getMethod());
+    EXPECT_EQ(std::string("example.com:443"), req.getPath());
 }
 
-// OPTIONS: asterisk-form はメソッドが OPTIONS だが未対応なので 501
-TEST(HttpRequest, RejectsOptionsAsteriskFormTarget)
+// OPTIONS: asterisk-form
+// も文法としてはパースできる（未対応はルーティング層で扱う）
+TEST(HttpRequest, ParsesOptionsAsteriskFormTarget)
 {
     http::HttpRequest req;
     std::vector<utils::Byte> buf =
         toBytes("OPTIONS * HTTP/1.1\r\nHost: example.com\r\n\r\n");
     utils::result::Result<size_t> r = req.parse(buf);
 
-    EXPECT_FALSE(r.isOk());
-    EXPECT_TRUE(req.hasParseError());
-    EXPECT_EQ(http::HttpStatus::NOT_IMPLEMENTED, req.getParseErrorStatus());
+    EXPECT_TRUE(r.isOk());
+    EXPECT_EQ(buf.size(), r.unwrap());
+    EXPECT_TRUE(req.isParseComplete());
+    EXPECT_FALSE(req.hasParseError());
+    EXPECT_EQ(http::HttpMethod::OPTIONS, req.getMethod());
+    EXPECT_EQ(std::string("*"), req.getPath());
 }
 
 // 2回に分けて送信（増分パース / Chunked）

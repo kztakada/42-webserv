@@ -153,6 +153,22 @@ bool LocationDirective::isMethodAllowed(const http::HttpMethod& method) const
     return conf_.allowed_methods.find(method) != conf_.allowed_methods.end();
 }
 
+std::string LocationDirective::buildAllowHeaderValue() const
+{
+    std::string out;
+    for (std::set<http::HttpMethod>::const_iterator it =
+             conf_.allowed_methods.begin();
+        it != conf_.allowed_methods.end(); ++it)
+    {
+        if (!out.empty())
+        {
+            out += ", ";
+        }
+        out += it->toString();
+    }
+    return out;
+}
+
 size_t LocationDirective::pathPatternLength() const
 {
     return conf_.path_pattern.length();
@@ -177,6 +193,31 @@ std::string LocationDirective::getAbsolutePath(const std::string& path) const
 }
 
 std::string LocationDirective::removePathPatternFromPath(
+    const std::string& path) const
+{
+    if (conf_.is_backward_search)
+    {
+        return path;
+    }
+    // root が location で明示されていない場合（server から継承）の扱い:
+    // - pattern が末尾 '/' のときは、prefix を除去して結合する（例: /delete/ ->
+    // /delete_me.txt）
+    // - それ以外は、root + request_uri の挙動にする（例: /directory ->
+    // /directory/Yeah） root が location で明示されている場合は、従来通り
+    // prefix を除去して結合する。
+    if (!conf_.has_root_dir)
+    {
+        if (!conf_.path_pattern.empty() &&
+            conf_.path_pattern[conf_.path_pattern.size() - 1] == '/')
+        {
+            return path.substr(conf_.path_pattern.length());
+        }
+        return path;
+    }
+    return path.substr(conf_.path_pattern.length());
+}
+
+std::string LocationDirective::stripPathPatternFromPath(
     const std::string& path) const
 {
     if (conf_.is_backward_search)

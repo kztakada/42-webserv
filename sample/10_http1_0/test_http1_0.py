@@ -198,16 +198,17 @@ def test_http10_cgi_no_chunked_and_close(host, port, keep_alive):
         sock.close()
 
 
-def test_http10_unsupported_method_is_501(host, port):
-    print("--- HTTP/1.0 unsupported method => 501 ---")
+def test_http10_unsupported_method_is_405(host, port):
+    print("--- HTTP/1.0 unsupported method => 405 ---")
     sock = socket.create_connection((host, port), timeout=2)
     sock.settimeout(2)
     try:
         req = b"HEAD /index.html HTTP/1.0\r\n\r\n"
         sock.sendall(req)
         h, b = read_response(sock)
-        assert_contains(h, b"501", "Expected 501 for unsupported method")
-        print("OK: 501 returned")
+        assert_contains(h, b"405", "Expected 405 for unsupported method")
+        assert_contains(h.lower(), b"allow:", "Expected Allow header for 405")
+        print("OK: 405 returned")
     finally:
         sock.close()
 
@@ -221,7 +222,7 @@ def main():
     test_http10_connection_close_explicit(host, port)
     test_http10_cgi_no_chunked_and_close(host, port, keep_alive=False)
     test_http10_cgi_no_chunked_and_close(host, port, keep_alive=True)
-    test_http10_unsupported_method_is_501(host, port)
+    test_http10_unsupported_method_is_405(host, port)
 
     print("All HTTP/1.0 tests passed.")
     return 0

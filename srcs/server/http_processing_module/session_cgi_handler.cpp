@@ -41,6 +41,15 @@ static bool isPhpCgiExecutor_(const std::string& executor_path)
     return base.find("php-cgi") != std::string::npos;
 }
 
+static bool is42CgiTesterExecutor_(const std::string& executor_path)
+{
+    const std::string::size_type pos = executor_path.find_last_of('/');
+    const std::string base = (pos == std::string::npos)
+                                 ? executor_path
+                                 : executor_path.substr(pos + 1);
+    return base.find("cgi_tester42") != std::string::npos;
+}
+
 SessionCgiHandler::SessionCgiHandler(FdSessionController& controller)
     : controller_(controller)
 {
@@ -69,16 +78,26 @@ Result<void> SessionCgiHandler::startCgi(HttpSession& session)
             request_body_fd = fd.unwrap();
     }
 
-    // cgi_extension は「拡張子に応じて特定の実行プログラムを起動する」ため、
-    // SCRIPT_NAME は URI 上の CGI スクリプトを指さない（実行プログラム自体は
-    // URI に現れない）。 そのため、PATH_INFO に request path 全体（query
-    // を除く）を入れる。
-    // - ルーティングで分解した script_name + path_info は、query を除いた
-    // request path 全体になる。
-    const std::string full_request_path =
-        cgi_ctx.script_name + cgi_ctx.path_info;
+    std::string script_name = cgi_ctx.script_name;
+    std::string path_info = cgi_ctx.path_info;
+    // 42のcgi_tester向けのwork around実装
+    if (is42CgiTesterExecutor_(cgi_ctx.executor_path.str()))
+    {
+        script_name = "";
+        if (path_info.empty())
+            path_info = "/";
+    }
+
+    // HTTPリクエスト関連をまとめてセットアップ
     http::CgiMetaVariables meta = http::CgiMetaVariables::fromHttpRequest(
-        ctx.request, "", full_request_path);
+        ctx.request, script_name, path_info);
+    // PATH_TRANSLATEDは、PATH_INFOが存在する場合だけ定義する
+    if (!path_info.empty())
+    {
+        std::string dir = dirnameOf_(cgi_ctx.script_filename.str());
+        std::map<std::string, std::string> env_ = meta.getAll();
+        meta.setPathTranslated(dir + env_["PATH_INFO"]);
+    }
 
     meta.setServerName(ctx.socket_fd.getServerIp().toString());
     meta.setServerPort(ctx.socket_fd.getServerPort().toNumber());

@@ -4,7 +4,7 @@
 - section: メソッド
 - item: `HEAD` を正常に処理できる（ボディなし）
 - port: 35265
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

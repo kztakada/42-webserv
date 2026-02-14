@@ -200,7 +200,7 @@ int main()
     const std::string conf_rel = "webserv.conf";
     const std::string repo_root_rel = "../../..";
     const std::string webserv_rel = "./webserv";
-    const int expected_status = 501;
+    const int expected_status = 405;
     const char* test_name = "status_header_head";
 
     char cwd_buf[4096];
@@ -234,8 +234,8 @@ int main()
         return 1;
     }
 
-    const std::string request =
-        std::string("HEAD / HTTP/1.1\r\nConnection: close\r\n\r\n");
+    const std::string request = std::string(
+        "HEAD / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
     if (!sendAll(client_fd, request))
     {
         std::cerr << "FAIL: send() failed\n";

@@ -4,7 +4,7 @@
 - section: メソッド/ルーティング
 - item: 未実装メソッド（`TRACE`, `CONNECT`）へのアクセス（`501 Not Implemented`）
 - port: 32928
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

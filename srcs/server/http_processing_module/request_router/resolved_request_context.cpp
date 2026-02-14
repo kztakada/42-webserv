@@ -18,6 +18,16 @@ Result<ResolvedRequestContext> ResolvedRequestContext::create(
     out.host_ = extractHost_(request);
 
     const std::string& raw_path = request.getPath();
+    // RFC 9112: CONNECT は authority-form (host:port) を request-target
+    // に取る。 405 の Allow ヘッダーを location 依存で返したいので、CONNECT
+    // とOPTIONSの場合も ルーティングできるよう request_path は便宜上 "/"
+    // として扱う。
+    if (request.getMethod() == http::HttpMethod::CONNECT ||
+        request.getMethod() == http::HttpMethod::OPTIONS)
+    {
+        out.request_path_ = "/";
+        return out;
+    }
     if (raw_path.empty() || raw_path[0] != '/')
     {
         return Result<ResolvedRequestContext>(utils::result::ERROR,

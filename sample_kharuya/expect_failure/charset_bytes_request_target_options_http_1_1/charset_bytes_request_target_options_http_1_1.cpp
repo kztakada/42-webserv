@@ -200,7 +200,7 @@ int main()
     const std::string conf_rel = "webserv.conf";
     const std::string repo_root_rel = "../../..";
     const std::string webserv_rel = "./webserv";
-    const int expected_status = 501;
+    const int expected_status = 405;
     const char* test_name = "charset_bytes_request_target_options_http_1_1";
 
     char cwd_buf[4096];

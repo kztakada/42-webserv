@@ -4,7 +4,7 @@
 - section: メソッド
 - item: `OPTIONS` を正常に処理できる（Allowヘッダー）
 - port: 36136
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

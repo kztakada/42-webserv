@@ -4,7 +4,7 @@
 - section: RFC9112: リクエストターゲット
 - item: authority-form（CONNECT）は拒否（未対応なら 405/501）
 - port: 32498
-- expected_status: 501
+- expected_status: 405S
 
 ## Request
 

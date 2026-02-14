@@ -498,8 +498,15 @@ Result<void> HttpRequest::parseMethod(const std::string& method)
         if (!isTchar(c))
             return Result<void>(ERROR, "invalid method token");
     }
+
+    Result<HttpMethod> m = HttpMethod::fromString(method);
+    if (m.isError())
+    {
+        parse_error_status_ = HttpStatus::NOT_IMPLEMENTED;
+        return Result<void>(ERROR, m.getErrorMessage());
+    }
+    method_ = m.unwrap();
     method_string_ = method;
-    method_ = HttpMethod::fromString(method);
     return Result<void>();
 }
 

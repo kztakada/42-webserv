@@ -200,7 +200,7 @@ int main()
     const std::string conf_rel = "webserv.conf";
     const std::string repo_root_rel = "../../..";
     const std::string webserv_rel = "./webserv";
-    const int expected_status = 501;
+    const int expected_status = 405;
     const char* test_name =
         "rfc9112_section_44aa71_authority_form_connect_405_501";
 

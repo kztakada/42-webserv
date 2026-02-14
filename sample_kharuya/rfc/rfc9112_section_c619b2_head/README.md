@@ -4,7 +4,7 @@
 - section: RFC9112: ステータスコード
 - item: HEAD でボディを送らずヘッダのみ返却される
 - port: 26262
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

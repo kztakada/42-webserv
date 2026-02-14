@@ -4,8 +4,12 @@
 #include <cstring>
 #include <string>
 
+#include "utils/result.hpp"
+
 namespace http
 {
+
+using namespace utils::result;
 
 // RFC9110, Section 16.1.1で定義されたHTTPメソッドを表すクラス
 class HttpMethod
@@ -126,9 +130,12 @@ class HttpMethod
     }
 
     // std::string版のオーバーロード
-    static HttpMethod fromString(const std::string& str)
+    static Result<HttpMethod> fromString(const std::string& str)
     {
-        return fromString(str.c_str());
+        const HttpMethod method = fromString(str.c_str());
+        if (method == UNKNOWN)
+            return Result<HttpMethod>(ERROR, "Unknown HTTP method: " + str);
+        return method;
     }
 
     static bool isValid(const char* str) { return fromString(str) != UNKNOWN; }

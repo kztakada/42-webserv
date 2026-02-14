@@ -263,12 +263,11 @@ TEST(RequestProcessor, UnsupportedMethodReturns405AndAppliesErrorPage)
 
     server::RequestProcessor proc(router);
 
-    const std::string methods[] = {
-        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE", "FOO"};
+    const std::string methods[] = {"PUT", "HEAD", "OPTIONS", "PATCH", "TRACE"};
 
     for (size_t i = 0; i < (sizeof(methods) / sizeof(methods[0])); ++i)
     {
-        // 未対応メソッドでもパース自体は成功する。
+        // 既知のメソッドだけパース自体は成功する。
         http::HttpRequest req;
         std::string raw =
             methods[i] + std::string(

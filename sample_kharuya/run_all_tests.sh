@@ -26,6 +26,7 @@ FILTER=""
 TIMEOUT_SEC=20
 ALLOW_DARWIN=0
 CATEGORY_ONLY=""
+SILENT=0
 
 # Colors (enabled only when stdout is a TTY)
 RED=""
@@ -49,6 +50,7 @@ Options:
 	--allow-darwin      Attempt to run on macOS (not supported by default)
   --filter <substr>  Only run tests whose directory path contains <substr>
 	--timeout <sec>    Per-test timeout if `timeout` exists (default: 20)
+  --silent           Show only failed logs and summary
   -h, --help         Show this help
 USAGE
 }
@@ -102,6 +104,10 @@ while [ $# -gt 0 ]; do
 			fi
 			TIMEOUT_SEC="$2"
 			shift 2
+			;;
+		--silent)
+			SILENT=1
+			shift
 			;;
 		-h|--help)
 			print_usage
@@ -265,15 +271,32 @@ for test_dir in "${TEST_DIRS[@]}"; do
 
 	total=$((total + 1))
 	rel="${test_dir#${REPO_ROOT}/}"
-	printf "%s=== [%s] %s ===%s\n" "${BOLD}" "${total}" "${rel}" "${RESET}"
 
-	compile_one "${test_dir}"
-	c_rc=$?
+	if [ ${SILENT} -eq 0 ]; then
+		printf "%s=== [%s] %s ===%s\n" "${BOLD}" "${total}" "${rel}" "${RESET}"
+	fi
+
+	if [ ${SILENT} -eq 1 ]; then
+		compile_out=$(compile_one "${test_dir}" 2>&1)
+		c_rc=$?
+	else
+		compile_one "${test_dir}"
+		c_rc=$?
+	fi
+
 	if [ ${c_rc} -ne 0 ]; then
 		if [ ${c_rc} -eq 10 ]; then
-			printf "%sSKIP%s: no .cpp found\n" "${YELLOW}" "${RESET}"
+			if [ ${SILENT} -eq 0 ]; then
+				printf "%sSKIP%s: no .cpp found\n" "${YELLOW}" "${RESET}"
+			fi
 			skipped=$((skipped + 1))
 			continue
+		fi
+		if [ ${SILENT} -eq 1 ]; then
+			printf "%s=== [%s] %s ===%s\n" "${BOLD}" "${total}" "${rel}" "${RESET}"
+			if [ -n "${compile_out}" ]; then
+				echo "${compile_out}"
+			fi
 		fi
 		printf "%sFAIL%s: compile error (rc=%s)\n" "${RED}" "${RESET}" "${c_rc}"
 		failed=$((failed + 1))
@@ -283,12 +306,26 @@ for test_dir in "${TEST_DIRS[@]}"; do
 		continue
 	fi
 
-	run_one "${test_dir}"
-	rc=$?
+	if [ ${SILENT} -eq 1 ]; then
+		run_out=$(run_one "${test_dir}" 2>&1)
+		rc=$?
+	else
+		run_one "${test_dir}"
+		rc=$?
+	fi
+
 	if [ ${rc} -eq 0 ]; then
-		printf "%sPASS%s\n" "${GREEN}" "${RESET}"
+		if [ ${SILENT} -eq 0 ]; then
+			printf "%sPASS%s\n" "${GREEN}" "${RESET}"
+		fi
 		passed=$((passed + 1))
 	else
+		if [ ${SILENT} -eq 1 ]; then
+			printf "%s=== [%s] %s ===%s\n" "${BOLD}" "${total}" "${rel}" "${RESET}"
+			if [ -n "${run_out}" ]; then
+				echo "${run_out}"
+			fi
+		fi
 		if [ ${has_timeout} -eq 1 ] && [ ${rc} -eq 124 ]; then
 			printf "%sFAIL%s: timeout (%ss)\n" "${RED}" "${RESET}" "${TIMEOUT_SEC}"
 		else

@@ -4,7 +4,7 @@
 - section: RFC9112: 応答不整合
 - item: HEAD でボディが返ってくる（失敗）
 - port: 25107
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

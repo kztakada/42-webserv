@@ -25,14 +25,13 @@ TEST(HttpMethod, FromStringCoversAllDefinedTypes)
         {"PATCH", http::HttpMethod::PATCH},
         {"CONNECT", http::HttpMethod::CONNECT},
         {"TRACE", http::HttpMethod::TRACE},
-        {"UNKNOWN", http::HttpMethod::UNKNOWN},
     };
 
     for (size_t i = 0; i < sizeof(kCases) / sizeof(kCases[0]); ++i)
     {
         EXPECT_EQ(kCases[i].type, http::HttpMethod::fromString(kCases[i].name));
         EXPECT_EQ(kCases[i].type,
-            http::HttpMethod::fromString(std::string(kCases[i].name)));
+            http::HttpMethod::fromString(std::string(kCases[i].name)).unwrap());
 
         if (kCases[i].type == http::HttpMethod::UNKNOWN)
         {

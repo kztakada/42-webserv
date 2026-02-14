@@ -4,7 +4,7 @@
 - section: ステータス/ヘッダー
 - item: `HEAD` でボディが返ってしまう
 - port: 27593
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

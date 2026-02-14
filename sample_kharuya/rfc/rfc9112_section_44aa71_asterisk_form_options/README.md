@@ -4,7 +4,7 @@
 - section: RFC9112: リクエストターゲット
 - item: asterisk-form（`OPTIONS *`）に対する適切な応答
 - port: 36976
-- expected_status: 501
+- expected_status: 405
 
 ## Request
 

@@ -111,14 +111,12 @@ TEST(HttpRequest, ParsesSupportedMethods)
     }
 }
 
-// 未対応メソッドでも、リクエストライン/ヘッダーの文法が正しければパース自体は成功する。
+// 既知のメソッドはパース自体は成功するが、未知のメソッドは501エラーとする
 // 405 + Allow はルーティング/レスポンス層で扱う。
 TEST(HttpRequest, ParsesUnsupportedMethodsWithoutParseError)
 {
     const char* kMethods[] = {
-        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT",
-        "FOO"  // unknown but valid token
-    };
+        "PUT", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"};
 
     for (size_t i = 0; i < sizeof(kMethods) / sizeof(char*); ++i)
     {

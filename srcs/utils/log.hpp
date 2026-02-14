@@ -20,84 +20,29 @@ class ProcessingLog;
 class ProcessingLog
 {
    public:
-    ProcessingLog()
-        : is_running_(false),
-          last_flush_epoch_seconds_(0),
-          active_connections_(0),
-          cgi_count_(0),
-          loop_time_max_seconds_(0),
-          req_time_max_seconds_(0),
-          block_io_count_(0),
-          cached_lines_()
-    {
-    }
+    ProcessingLog();
 
-    void run()
-    {
-        is_running_ = true;
-        last_flush_epoch_seconds_ = Timestamp::nowEpochSeconds();
-    }
-
-    void stop()
-    {
-        if (!is_running_)
-            return;
-        tick(true);
-        is_running_ = false;
-    }
+    void run();
+    void stop();
 
     // Server のイベントループから定期的に呼び出す。
-    void tick(bool force_flush)
-    {
-        if (!is_running_)
-            return;
-
-        const long now = Timestamp::nowEpochSeconds();
-        if (!force_flush && (now - last_flush_epoch_seconds_) < 1)
-            return;
-
-        cacheCurrentLine_();
-        flushCache_();
-        resetPeriodMetrics_();
-        last_flush_epoch_seconds_ = now;
-    }
-
+    void tick(bool force_flush);
     void tick() { tick(false); }
 
     // --- 更新API ---
     void onConnectionOpened() { ++active_connections_; }
-    void onConnectionClosed()
-    {
-        if (active_connections_ > 0)
-            --active_connections_;
-    }
+    void onConnectionClosed();
 
     void onCgiStarted() { ++cgi_count_; }
-    void onCgiFinished()
-    {
-        if (cgi_count_ > 0)
-            --cgi_count_;
-    }
+    void onCgiFinished();
 
-    void recordLoopTimeSeconds(long seconds)
-    {
-        if (seconds > loop_time_max_seconds_)
-            loop_time_max_seconds_ = seconds;
-    }
+    void recordLoopTimeSeconds(long seconds);
 
-    void recordRequestTimeSeconds(long seconds)
-    {
-        if (seconds > req_time_max_seconds_)
-            req_time_max_seconds_ = seconds;
-    }
+    void recordRequestTimeSeconds(long seconds);
 
     void incrementBlockIo() { ++block_io_count_; }
 
-    void clearFile()
-    {
-        std::ofstream ofs(getFilePath_(), std::ios::trunc);
-        ofs.close();
-    }
+    void clearFile();
 
    private:
     bool is_running_;
@@ -123,35 +68,8 @@ class ProcessingLog
         block_io_count_ = 0;
     }
 
-    void cacheCurrentLine_()
-    {
-        std::ostringstream oss;
-        oss << Timestamp::now() << ", " << active_connections_ << ", "
-            << loop_time_max_seconds_ << ", " << req_time_max_seconds_ << ", "
-            << cgi_count_ << ", " << block_io_count_;
-        cached_lines_.push_back(oss.str());
-    }
-
-    void flushCache_()
-    {
-        if (cached_lines_.empty())
-            return;
-
-        std::ofstream ofs(getFilePath_(), std::ios::app);
-        if (!ofs)
-        {
-            std::cerr << "[ERROR] Failed to open log file." << " at "
-                      << getFilePath_() << std::endl;
-            cached_lines_.clear();
-            return;
-        }
-
-        for (size_t i = 0; i < cached_lines_.size(); ++i)
-        {
-            ofs << cached_lines_[i] << std::endl;
-        }
-        cached_lines_.clear();
-    }
+    void cacheCurrentLine_();
+    void flushCache_();
 };
 
 class Log

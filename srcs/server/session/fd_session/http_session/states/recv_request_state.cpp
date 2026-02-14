@@ -1,4 +1,5 @@
 #include "server/session/fd_session/http_session.hpp"
+#include "server/session/fd_session/http_session/actions/send_error_action.hpp"
 #include "server/session/fd_session/http_session/states/http_session_states.hpp"
 #include "server/session/fd_session_controller.hpp"
 #include "utils/log.hpp"
@@ -27,27 +28,16 @@ static bool isRequestParsingNotStarted_(const http::HttpRequest& request)
 Result<void> RecvRequestState::handleEvent(
     HttpSession& context, const FdEvent& event)
 {
-    // クライアント側のclose検出（自分のソケットのみ）
+    bool saw_peer_half_close = false;
     if (event.is_opposite_close &&
         event.fd == context.context_.socket_fd.getFd())
     {
+        // half-close 検出: peer は write 側を閉じた。
+        // ただし、カーネルに未読データが残っている可能性があるので、
+        // ここでは即終了せず、通常の read ループで drain を試みる。
         context.context_.peer_closed = true;
         context.context_.should_close_connection = true;
-
-        // リクエスト受信中に相手が閉じた場合、追加入力は来ない。
-        // ただし user-space に残っている分だけは一度だけ処理を試みる。
-        (void)context.consumeRecvBufferWithoutRead_();
-
-        // 状態がまだRECVなら（遷移していないなら）終了
-        if (context.context_.pending_state == NULL)
-        {
-            context.changeState(new CloseWaitState());
-            context.context_.socket_fd.shutdown();
-            context.cleanupCgiOnClose_();
-            context.controller_.requestDelete(&context);
-            return Result<void>();
-        }
-        return Result<void>();
+        saw_peer_half_close = true;
     }
 
     if (event.type == kReadEvent)
@@ -99,12 +89,11 @@ Result<void> RecvRequestState::handleEvent(
             }
             if (n == 0)
             {
-                // クライアントが切断
-                context.changeState(new CloseWaitState());
-                context.context_.socket_fd.shutdown();
-                context.cleanupCgiOnClose_();
-                context.controller_.requestDelete(&context);
-                return Result<void>();
+                // EOF (= peer の write 側が閉じた)
+                context.context_.peer_closed = true;
+                context.context_.should_close_connection = true;
+                saw_peer_half_close = true;
+                break;
             }
 
             // 新規リクエストの最初のTCP受信のみログする。
@@ -129,6 +118,29 @@ Result<void> RecvRequestState::handleEvent(
         }
         // context_.recv_buffer サイズに応じた read watch のON/OFF を反映する。
         (void)context.updateSocketWatches_();
+    }
+
+    // peer からの追加入力が来ないことが確定した場合、
+    // 未完のリクエスト（例: Content-Length 未達）を 400 で落とす。
+    if (saw_peer_half_close)
+    {
+        (void)context.consumeRecvBufferWithoutRead_();
+
+        if (context.context_.pending_state != NULL)
+            return Result<void>();
+
+        if (isRequestParsingNotStarted_(context.context_.request) &&
+            context.context_.recv_buffer.size() == 0)
+        {
+            context.changeState(new CloseWaitState());
+            context.context_.socket_fd.shutdown();
+            context.cleanupCgiOnClose_();
+            context.controller_.requestDelete(&context);
+            return Result<void>();
+        }
+
+        SendErrorAction action(http::HttpStatus::BAD_REQUEST);
+        return action.execute(context);
     }
 
     return Result<void>();

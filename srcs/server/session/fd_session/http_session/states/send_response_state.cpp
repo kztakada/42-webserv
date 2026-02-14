@@ -63,16 +63,11 @@ Result<void> SendResponseState::handleEvent(
     if (event.is_opposite_close &&
         event.fd == context.context_.socket_fd.getFd())
     {
+        // peer が write 側を閉じた（ハーフクローズ）。
+        // この場合でも peer はレスポンスを read できるため、送信は継続する。
+        // ただし、次のリクエストは来ないので keep-alive は維持しない。
         context.context_.peer_closed = true;
         context.context_.should_close_connection = true;
-
-        // レスポンス送信中に相手が閉じた場合、送信は完遂できない。
-        context.changeState(new CloseWaitState());
-        context.context_.socket_fd.shutdown();
-
-        context.cleanupCgiOnClose_();
-        context.controller_.requestDelete(&context);
-        return Result<void>();
     }
 
     if (event.type != kWriteEvent)

@@ -9,16 +9,23 @@ using namespace utils::result;
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    std::string config_file;
+    if (argc == 1)
+        config_file = "./srcs/server/config/default.conf";
+    else if (argc == 2)
+        config_file = argv[1];
+    else
     {
-        std::cerr << "Usage: " << argv[0] << " <config_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [configuration file]"
+                  << std::endl;
         return EXIT_FAILURE;
     }
 
     try
     {
         // 1. 設定ファイルを読み込んでServerConfigオブジェクトを作成
-        Result<ServerConfig> config_result = ConfigParser::parseFile(argv[1]);
+        Result<ServerConfig> config_result =
+            ConfigParser::parseFile(config_file);
         if (config_result.isError())
         {
             std::cerr << "Config error: " << config_result.getErrorMessage()

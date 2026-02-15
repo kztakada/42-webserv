@@ -150,6 +150,7 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
         const int rc = std::remove(target_path.c_str());
         if (rc == 0)
         {
+            // success
             Result<void> s =
                 out_response.setStatus(http::HttpStatus::NO_CONTENT);
             if (s.isError())

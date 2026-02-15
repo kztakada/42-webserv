@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -683,10 +682,7 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
                 if (out_fd < 0)
                 {
                     ::close(in_fd);
-                    std::ostringstream oss;
-                    oss << "open() failed: " << out_path << ": "
-                        << std::strerror(errno);
-                    return Result<void>(ERROR, oss.str());
+                    return Result<void>(ERROR, "open() failed");
                 }
             }
 
@@ -736,10 +732,7 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
         if (out_fd < 0)
         {
             ::close(in_fd);
-            std::ostringstream oss;
-            oss << "open() failed: " << out_path << ": "
-                << std::strerror(errno);
-            return Result<void>(ERROR, oss.str());
+            return Result<void>(ERROR, "open() failed");
         }
         Result<void> c = copyFdToFd_(in_fd, out_fd);
         ::close(out_fd);

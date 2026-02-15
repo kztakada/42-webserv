@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cerrno>
+
 #include "http/content_types.hpp"
 #include "server/session/fd_session/http_session/body_source.hpp"
 
@@ -27,9 +29,14 @@ Result<RequestProcessorOutput> StaticFileResponder::respondFile(
     const std::string& path, const struct stat& st,
     const http::HttpStatus& status, http::HttpResponse& out_response) const
 {
+    errno = 0;
     const int fd = ::open(path.c_str(), O_RDONLY);
     if (fd < 0)
     {
+        if (errno == EACCES || errno == EPERM)
+            return Result<RequestProcessorOutput>(ERROR, "forbidden");
+        if (errno == ENOENT || errno == ENOTDIR)
+            return Result<RequestProcessorOutput>(ERROR, "not_found");
         return Result<RequestProcessorOutput>(ERROR, "open failed");
     }
 

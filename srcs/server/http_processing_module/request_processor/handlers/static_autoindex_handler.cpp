@@ -217,6 +217,30 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
                     res.output = rf.unwrap();
                     return res;
                 }
+
+                if (rf.getErrorMessage() == "forbidden")
+                {
+                    // index ファイルが存在するが読めない場合は 403。
+                    http::HttpRequest next;
+                    if (tryInternalRedirect_(internal_redirect_, router_,
+                            server_ip, server_port, state->current,
+                            http::HttpStatus::FORBIDDEN, state, &next))
+                    {
+                        HandlerResult res;
+                        res.should_continue = true;
+                        res.next_request = next;
+                        return res;
+                    }
+
+                    Result<RequestProcessorOutput> r = error_renderer_.respond(
+                        http::HttpStatus::FORBIDDEN, out_response);
+                    if (r.isError())
+                        return Result<HandlerResult>(
+                            ERROR, r.getErrorMessage());
+                    HandlerResult res;
+                    res.output = r.unwrap();
+                    return res;
+                }
             }
 
             if (ctx.autoindex_enabled)
@@ -319,10 +343,15 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
             out_response);
     if (rf.isError())
     {
+        http::HttpStatus err = http::HttpStatus::NOT_FOUND;
+        if (rf.getErrorMessage() == "forbidden")
+            err = http::HttpStatus::FORBIDDEN;
+        else if (rf.getErrorMessage() != "not_found")
+            err = http::HttpStatus::SERVER_ERROR;
+
         http::HttpRequest next;
         if (tryInternalRedirect_(internal_redirect_, router_, server_ip,
-                server_port, state->current, http::HttpStatus::NOT_FOUND, state,
-                &next))
+                server_port, state->current, err, state, &next))
         {
             HandlerResult res;
             res.should_continue = true;
@@ -331,7 +360,7 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
         }
 
         Result<RequestProcessorOutput> r =
-            error_renderer_.respond(http::HttpStatus::NOT_FOUND, out_response);
+            error_renderer_.respond(err, out_response);
         if (r.isError())
             return Result<HandlerResult>(ERROR, r.getErrorMessage());
         HandlerResult res;

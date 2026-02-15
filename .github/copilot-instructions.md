@@ -35,6 +35,7 @@ webserv - C++98で書かれたシンプルなHTTPサーバー
 `kill()`, `signal()`, `access()`, `stat()`, `open()`, `opendir()`, `readdir()`, `closedir()`
 - STLライブラリは使用可能
 - その他の外部ライブラリとBoostは使用禁止
+- read() と write() のみ、 実行後の errno による分岐判断実装は禁止
 
 ## コーディングStyleガイドライン
 

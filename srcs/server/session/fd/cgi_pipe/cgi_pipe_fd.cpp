@@ -5,7 +5,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <cerrno>
 #include <string>
 
 namespace server
@@ -14,30 +13,6 @@ namespace server
 CgiPipeFd::CgiPipeFd(int fd) : FdBase(fd) {}
 
 CgiPipeFd::~CgiPipeFd() {}
-
-// void CgiPipeFd::KillProcess() {
-//   if (cgi_pid_ > 0) {
-//     kill(cgi_pid_, SIGKILL);
-//   }
-// }
-
-// bool CgiPipeFd::IsProcessAlive() const {
-//   if (cgi_pid_ <= 0) {
-//     return false;
-//   }
-//   int status;
-//   pid_t result = waitpid(cgi_pid_, &status, WNOHANG);
-//   return result == 0;
-// }
-
-// int CgiPipeFd::WaitProcess() {
-//   if (cgi_pid_ <= 0) {
-//     return -1;
-//   }
-//   int status;
-//   waitpid(cgi_pid_, &status, 0);
-//   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-// }
 
 std::string CgiPipeFd::GetResourceType() const { return "CgiPipeFd"; }
 

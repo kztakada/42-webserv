@@ -116,7 +116,7 @@ Result<void> BodyStore::removeFile()
     if (path_.empty())
         return Result<void>();
 
-    // std::remove は失敗時に errno を立てるが、ここでは詳細は扱わない。
+    // std::remove は失敗する場合があるが、
     // 未作成・既に削除済みのケースもあるため、失敗は致命としない運用を想定。
     const int rc = std::remove(path_.c_str());
     if (rc == 0)
@@ -129,9 +129,7 @@ Result<void> BodyStore::begin()
     if (write_fd_ >= 0)
         return Result<void>();
 
-    // 事前に access() で書き込み可否を判定する（失敗後の errno
-    // 参照に頼らない）。 NOTE: TOCTTOU
-    // はあるが、HTTPステータス判断の安定化を優先する。
+    // 事前に access() で書き込み可否を判定する
     if (!path_.empty())
     {
         if (::access(path_.c_str(), F_OK) == 0)

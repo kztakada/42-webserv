@@ -125,7 +125,6 @@ Result<void> SendResponseState::handleEvent(
                 context.context_.in_write_backpressure = true;
                 utils::Log::warning("Write BackPressure occurred");
             }
-            // 実装規定: read/write 後の errno 分岐は禁止。
             return Result<void>();
         }
         // バックプレッシャーログ出力後、解除する

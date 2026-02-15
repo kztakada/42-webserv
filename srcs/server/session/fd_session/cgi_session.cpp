@@ -259,7 +259,6 @@ Result<void> CgiSession::handleStdin_(FdEventType type)
         {
             if (processing_log_ != NULL)
                 processing_log_->incrementBlockIo();  // ログ計測
-            // 実装規定: write 後の errno 分岐は禁止。
             return Result<void>();
         }
     }
@@ -331,7 +330,6 @@ Result<void> CgiSession::handleStdout_(FdEventType type)
 
     const ssize_t r = stdout_buffer_.fillFromFd(pipe_out_.getFd());
 
-    // 実装規定: read 後の errno 分岐は禁止。
     if (r < 0)
     {
         if (processing_log_ != NULL)

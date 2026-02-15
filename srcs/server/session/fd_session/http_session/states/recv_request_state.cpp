@@ -84,7 +84,6 @@ Result<void> RecvRequestState::handleEvent(
             {
                 if (context.processingLog() != NULL)
                     context.processingLog()->incrementBlockIo();  // ログ計測
-                // 実装規定: read/write 後の errno 分岐は禁止。
                 break;
             }
             if (n == 0)

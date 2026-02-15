@@ -45,7 +45,12 @@ LocationRouting::LocationRouting()
       request_method_(http::HttpMethod::UNKNOWN),
       content_length_(0),
       has_content_length_(false),
-      status_(http::HttpStatus::SERVER_ERROR)
+      status_(http::HttpStatus::SERVER_ERROR),
+      redirect_location_(),
+      query_string_(),
+      cgi_script_name_override_(),
+      cgi_script_filename_override_(),
+      cgi_executor_override_()
 {
     next_action_ = RESPOND_ERROR;
 }
@@ -59,7 +64,12 @@ LocationRouting::LocationRouting(const VirtualServer* vserver,
       request_method_(req.getMethod()),
       content_length_(0),
       has_content_length_(false),
-      status_(status)
+      status_(status),
+      redirect_location_(),
+      query_string_(),
+      cgi_script_name_override_(),
+      cgi_script_filename_override_(),
+      cgi_executor_override_()
 {
     (void)decideAction_(req);
 }
@@ -205,6 +215,20 @@ Result<CgiContext> LocationRouting::getCgiContext() const
     {
         return Result<CgiContext>(
             utils::result::ERROR, CgiContext(), "no location matched");
+    }
+
+    // ディレクトリURIの index を CGI として扱った場合は、
+    // request path から CGI 拡張子が判定できないため override を返す。
+    if (!cgi_script_name_override_.empty())
+    {
+        CgiContext ctx;
+        ctx.executor_path = cgi_executor_override_;
+        ctx.script_filename = cgi_script_filename_override_;
+        ctx.script_name = cgi_script_name_override_;
+        ctx.path_info = std::string();
+        ctx.query_string = query_string_;
+        ctx.http_minor_version = request_ctx_.getMinorVersion();
+        return ctx;
     }
 
     const std::string& uri_path = request_ctx_.getRequestPath();
@@ -393,6 +417,9 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
     next_action_ = RESPOND_ERROR;
     redirect_location_.clear();
     query_string_ = req.getQueryString();
+    cgi_script_name_override_.clear();
+    cgi_script_filename_override_ = utils::path::PhysicalPath();
+    cgi_executor_override_ = utils::path::PhysicalPath();
 
     if (status_.isError())
     {
@@ -530,9 +557,125 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
             next_action_ = RUN_CGI;
             return Result<void>();
         }
+
+        // request path 自体が拡張子にマッチしない場合でも、
+        // ディレクトリURIの index が CGI 実行可能なら CGI を選ぶ。
+        Result<void> idx = tryApplyCgiByIndexIfDirectory_();
+        if (idx.isError())
+        {
+            return idx;
+        }
+        if (next_action_ == RUN_CGI)
+        {
+            return Result<void>();
+        }
     }
 
     next_action_ = SERVE_STATIC;
+    return Result<void>();
+}
+
+Result<void> LocationRouting::tryApplyCgiByIndexIfDirectory_()
+{
+    if (!location_ || !location_->isCgiEnabled())
+    {
+        return Result<void>();
+    }
+
+    const std::string& uri_raw = request_ctx_.getRequestPath();
+    if (uri_raw.empty())
+    {
+        return Result<void>();
+    }
+
+    // 末尾'/'の有無に関わらず、実体がディレクトリなら index を探索する。
+    const bool has_trailing_slash = (uri_raw[uri_raw.size() - 1] == '/');
+    const std::string uri_dir = has_trailing_slash ? uri_raw : (uri_raw + "/");
+
+    std::string uri_under_location =
+        location_->removePathPatternFromPath(uri_dir);
+    if (uri_under_location.empty())
+    {
+        uri_under_location = "/";
+    }
+    else if (uri_under_location[0] != '/')
+    {
+        uri_under_location = "/" + uri_under_location;
+    }
+
+    Result<utils::path::PhysicalPath> dir_physical =
+        utils::path::resolvePhysicalPathUnderRoot(
+            location_->rootDir(), uri_under_location, false);
+    if (dir_physical.isError())
+    {
+        return Result<void>();
+    }
+
+    struct stat dir_st;
+    if (::stat(dir_physical.unwrap().str().c_str(), &dir_st) != 0)
+    {
+        return Result<void>();
+    }
+    if (!S_ISDIR(dir_st.st_mode))
+    {
+        return Result<void>();
+    }
+
+    const std::vector<std::string> uri_cands =
+        location_->buildIndexCandidateUriPaths(uri_dir);
+    for (size_t i = 0; i < uri_cands.size(); ++i)
+    {
+        const std::string& cand_uri = uri_cands[i];
+
+        utils::path::PhysicalPath exec;
+        std::string ext;
+        size_t end = std::string::npos;
+        location_->chooseCgiExecutorByRequestPath(cand_uri, &exec, &ext, &end);
+        if (end == std::string::npos)
+        {
+            continue;
+        }
+
+        const std::string script_name = cand_uri.substr(0, end);
+
+        std::string script_under_location =
+            location_->removePathPatternFromPath(script_name);
+        if (script_under_location.empty())
+        {
+            script_under_location = "/";
+        }
+        else if (script_under_location[0] != '/')
+        {
+            script_under_location = "/" + script_under_location;
+        }
+
+        Result<utils::path::PhysicalPath> script_physical =
+            utils::path::resolvePhysicalPathUnderRoot(
+                location_->rootDir(), script_under_location, true);
+        if (script_physical.isError())
+        {
+            continue;
+        }
+
+        struct stat st;
+        if (::stat(script_physical.unwrap().str().c_str(), &st) != 0 ||
+            !S_ISREG(st.st_mode))
+        {
+            continue;
+        }
+
+        if (::access(script_physical.unwrap().str().c_str(), X_OK) != 0)
+        {
+            continue;
+        }
+
+        cgi_script_name_override_ = script_name;
+        cgi_script_filename_override_ = script_physical.unwrap();
+        cgi_executor_override_ = exec;
+        next_action_ = RUN_CGI;
+        return Result<void>();
+    }
+
     return Result<void>();
 }
 

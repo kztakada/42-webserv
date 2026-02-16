@@ -254,7 +254,7 @@ TEST(LocationRouting, ResolvePhysicalPathUnderRootOrErrorRejectsSymlinkEscape)
     EXPECT_TRUE(p.isError());
 }
 
-TEST(LocationRouting, ReturnRedirectInternalBuildsInternalRequest)
+TEST(LocationRouting, ReturnRedirectWithRelativeLocationIsExternalRedirect)
 {
     server::LocationDirectiveConf loc;
     ASSERT_TRUE(loc.setPathPattern("/").isOk());
@@ -273,16 +273,14 @@ TEST(LocationRouting, ReturnRedirectInternalBuildsInternalRequest)
     server::LocationRouting r(
         &vserver, matched, ctx_res.unwrap(), req, http::HttpStatus::OK);
 
-    EXPECT_EQ(r.getNextAction(), server::REDIRECT_INTERNAL);
+    EXPECT_EQ(r.getNextAction(), server::REDIRECT_EXTERNAL);
     utils::result::Result<std::string> loc_hdr = r.getRedirectLocation();
     ASSERT_TRUE(loc_hdr.isOk());
     EXPECT_EQ(loc_hdr.unwrap(), std::string("/moved"));
 
     utils::result::Result<http::HttpRequest> next =
         r.getInternalRedirectRequest();
-    ASSERT_TRUE(next.isOk());
-    EXPECT_EQ(next.unwrap().getPath(), std::string("/moved"));
-    EXPECT_EQ(next.unwrap().getMinorVersion(), 1);
+    EXPECT_TRUE(next.isError());
 }
 
 TEST(LocationRouting, PayloadTooLargeByContentLength)

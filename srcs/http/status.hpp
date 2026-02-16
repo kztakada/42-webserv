@@ -27,6 +27,7 @@ class HttpStatus
         SEE_OTHER = 303,
         NOT_MODIFIED = 304,
         TEMPORARY_REDIRECT = 307,
+        PERMANENT_REDIRECT = 308,
         BAD_REQUEST = 400,
         UNAUTHORIZED = 401,
         FORBIDDEN = 403,
@@ -120,6 +121,8 @@ class HttpStatus
                 return "Not Modified";
             case TEMPORARY_REDIRECT:
                 return "Temporary Redirect";
+            case PERMANENT_REDIRECT:
+                return "Permanent Redirect";
             case BAD_REQUEST:
                 return "Bad Request";
             case UNAUTHORIZED:
@@ -250,6 +253,8 @@ class HttpStatus
                 return NOT_MODIFIED;
             case 307:
                 return TEMPORARY_REDIRECT;
+            case 308:
+                return PERMANENT_REDIRECT;
             case 400:
                 return BAD_REQUEST;
             case 401:

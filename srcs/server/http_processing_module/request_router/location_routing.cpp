@@ -436,14 +436,11 @@ Result<void> LocationRouting::decideAction_(const http::HttpRequest& req)
     {
         status_ = location_->redirectStatus();
         redirect_location_ = location_->redirectTarget();
-        if (!redirect_location_.empty() && redirect_location_[0] == '/')
-        {
-            next_action_ = REDIRECT_INTERNAL;
-        }
-        else
-        {
-            next_action_ = REDIRECT_EXTERNAL;
-        }
+        // `return` によるリダイレクトは、相対パス指定（/foo）であっても
+        // クライアントへ 3xx + Location を返す。
+        // error_page の内部リダイレクトは applyErrorPageOrRespondError_()
+        // 側で扱う。
+        next_action_ = REDIRECT_EXTERNAL;
         return Result<void>();
     }
 

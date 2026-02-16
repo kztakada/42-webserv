@@ -30,10 +30,10 @@ bool HttpResponseEncoder::shouldCloseConnection() const
     return should_close_connection_;
 }
 
-Result<void> HttpResponseEncoder::decide_(HttpResponse& response)
+void HttpResponseEncoder::decide_(HttpResponse& response)
 {
     if (decided_)
-        return Result<void>();
+        return;
 
     decided_ = true;
     body_bytes_sent_ = 0;
@@ -94,16 +94,12 @@ Result<void> HttpResponseEncoder::decide_(HttpResponse& response)
             should_close_connection_ = true;
         }
     }
-
-    return Result<void>();
 }
 
 Result<std::vector<utils::Byte> > HttpResponseEncoder::encodeHeader(
     HttpResponse& response)
 {
-    Result<void> d = decide_(response);
-    if (d.isError())
-        return Result<std::vector<utils::Byte> >(ERROR, d.getErrorMessage());
+    decide_(response);
 
     // 送出バージョンは request に合わせる（response の値は上書きしない方針）
     const std::string version =
@@ -198,9 +194,7 @@ Result<std::vector<utils::Byte> > HttpResponseEncoder::encodeHeader(
 Result<std::vector<utils::Byte> > HttpResponseEncoder::encodeBodyChunk(
     HttpResponse& response, const utils::Byte* data, size_t len)
 {
-    Result<void> d = decide_(response);
-    if (d.isError())
-        return Result<std::vector<utils::Byte> >(ERROR, d.getErrorMessage());
+    decide_(response);
 
     if (response.isComplete())
         return std::vector<utils::Byte>();
@@ -248,9 +242,7 @@ Result<std::vector<utils::Byte> > HttpResponseEncoder::encodeBodyChunk(
 Result<std::vector<utils::Byte> > HttpResponseEncoder::encodeEof(
     HttpResponse& response)
 {
-    Result<void> d = decide_(response);
-    if (d.isError())
-        return Result<std::vector<utils::Byte> >(ERROR, d.getErrorMessage());
+    decide_(response);
 
     if (response.isComplete())
         return std::vector<utils::Byte>();

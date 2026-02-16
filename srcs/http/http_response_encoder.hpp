@@ -58,7 +58,7 @@ class HttpResponseEncoder
     unsigned long expected_content_length_;
     unsigned long body_bytes_sent_;
 
-    Result<void> decide_(HttpResponse& response);
+    void decide_(HttpResponse& response);
     static bool isBodyForbiddenStatus_(HttpStatus status);
     static std::string reasonOrDefault_(const HttpResponse& response);
 

@@ -12,6 +12,40 @@
 namespace server
 {
 
+Result<void> SendResponseState::switchToInternalServerErrorAndClose_(
+    HttpSession& session, const std::string& message) const
+{
+    utils::Log::error(
+        "SendResponseState", "response body read error:", message);
+
+    session.cleanupCgiOnClose_();
+    session.clearBodyWatch_();
+    session.context_.pause_write_until_body_ready = false;
+
+    // 送信途中のデータは破棄し、500 に差し替える。
+    session.context_.send_buffer.consume(session.context_.send_buffer.size());
+
+    RequestProcessor::Output out;
+    Result<void> bo =
+        session.buildErrorOutput_(http::HttpStatus::SERVER_ERROR, &out);
+    if (bo.isError())
+    {
+        session.changeState(new CloseWaitState());
+        (void)session.updateSocketWatches_();
+        return bo;
+    }
+
+    session.context_.response.setHttpVersion(
+        session.context_.request.getHttpVersion());
+    (void)session.context_.response.setHeader("Connection", "close");
+    session.context_.should_close_connection = true;
+
+    session.installBodySourceAndWriter_(out.body_source);
+    session.changeState(new SendResponseState());
+    (void)session.updateSocketWatches_();
+    return Result<void>();
+}
+
 using namespace utils::result;
 
 Result<void> SendResponseState::handleEvent(
@@ -45,8 +79,12 @@ Result<void> SendResponseState::handleEvent(
             context.context_.response_writer != NULL &&
             !context.context_.response.isComplete())
         {
-            (void)context.context_.response_writer->pump(
-                context.context_.send_buffer);
+            Result<HttpResponseWriter::PumpResult> pumped =
+                context.context_.response_writer->pump(
+                    context.context_.send_buffer);
+            if (pumped.isError())
+                return switchToInternalServerErrorAndClose_(
+                    context, pumped.getErrorMessage());
             // pump の結果で send_buffer が空のままなら write を止める
             if (context.context_.send_buffer.size() == 0 &&
                 !context.context_.response.isComplete())
@@ -90,10 +128,8 @@ Result<void> SendResponseState::handleEvent(
             context.context_.response_writer->pump(
                 context.context_.send_buffer);
         if (pumped.isError())
-        {
-            context.changeState(new CloseWaitState());
-            return Result<void>(ERROR, pumped.getErrorMessage());
-        }
+            return switchToInternalServerErrorAndClose_(
+                context, pumped.getErrorMessage());
 
         const HttpResponseWriter::PumpResult pr = pumped.unwrap();
         if (pr.should_close_connection)

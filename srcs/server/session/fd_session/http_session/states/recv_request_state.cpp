@@ -42,23 +42,21 @@ Result<void> RecvRequestState::handleEvent(
 
     if (event.type == kReadEvent)
     {
-        for (;;)
+        // まず、すでにバッファに溜まっている分を先に消費する（read()しない）。
+        Result<void> c = context.consumeRecvBufferWithoutRead_();
+        if (c.isError())
+            return c;
+
+        // バックプレッシャーが解除した場合に更新する
+        if (context.context_.in_read_backpressure &&
+            context.context_.recv_buffer.size() <
+                HttpSession::kMaxRecvBufferBytes)
+            context.context_.in_read_backpressure = false;
+
+        // 消費の結果として状態遷移待ちならここで終了。
+        if (context.context_.pending_state == NULL)
         {
-            // まず、すでにバッファに溜まっている分を先に消費する（read()しない）。
-            Result<void> c = context.consumeRecvBufferWithoutRead_();
-            if (c.isError())
-                return c;
-
-            // バックプレッシャーが解除した場合に更新する
-            if (context.context_.in_read_backpressure &&
-                context.context_.recv_buffer.size() <
-                    HttpSession::kMaxRecvBufferBytes)
-                context.context_.in_read_backpressure = false;
-
-            // 消費の結果として状態遷移待ちならここで終了。
-            if (context.context_.pending_state != NULL)
-                break;
-
+            bool canRead = true;
             // context_.recv_buffer が上限に達している間は read を止める。
             if (context.context_.recv_buffer.size() >=
                 HttpSession::kMaxRecvBufferBytes)
@@ -70,49 +68,68 @@ Result<void> RecvRequestState::handleEvent(
                     utils::Log::warning("Read BackPressure occurred");
                 }
                 (void)context.updateSocketWatches_();
-                break;
+                canRead = false;
             }
 
-            // まだ足りない。ソケットから追加入力を読む。
-            const bool is_new_request = isRequestParsingNotStarted_(
-                context.context_.request);  // ログ出力用
-            const size_t before_read_buffer_size =
-                context.context_.recv_buffer.size();  // ログ出力用
-            const ssize_t n = context.context_.recv_buffer.fillFromFd(
-                context.context_.socket_fd.getFd());
-            if (n < 0)
+            if (canRead)
             {
-                if (context.processingLog() != NULL)
-                    context.processingLog()->incrementBlockIo();  // ログ計測
-                break;
-            }
-            if (n == 0)
-            {
-                // EOF (= peer の write 側が閉じた)
-                context.context_.peer_closed = true;
-                context.context_.should_close_connection = true;
-                saw_peer_half_close = true;
-                break;
-            }
+                const bool is_new_request = isRequestParsingNotStarted_(
+                    context.context_.request);  // ログ出力用
+                const size_t before_read_buffer_size =
+                    context.context_.recv_buffer.size();  // ログ出力用
+                // ソケットから入力を読む。
+                const ssize_t n = context.context_.recv_buffer.fillFromFd(
+                    context.context_.socket_fd.getFd());
+                if (n < 0)
+                {
+                    context.changeState(new CloseWaitState());
+                    return Result<void>(ERROR, "event fd read failed");
+                }
+                if (n == 0)
+                {
+                    // EOF (= peer の write 側が閉じた)
+                    context.context_.peer_closed = true;
+                    context.context_.should_close_connection = true;
+                    saw_peer_half_close = true;
+                }
+                // 新規リクエストの最初のTCP受信のみログする。
+                // pipeline 等で recv_buffer に既に残りがある場合はログしない。
+                if (n > 0)
+                {
+                    if (is_new_request && before_read_buffer_size == 0)
+                    {
+                        // ログ計測
+                        context.context_.has_request_start_time = true;
+                        context.context_.request_start_time_seconds =
+                            utils::Timestamp::nowEpochSeconds();
 
-            // 新規リクエストの最初のTCP受信のみログする。
-            // pipeline 等で recv_buffer に既に残りがある場合はログしない。
-            if (n > 0 && is_new_request && before_read_buffer_size == 0)
-            {
-                // ログ計測
-                context.context_.has_request_start_time = true;
-                context.context_.request_start_time_seconds =
-                    utils::Timestamp::nowEpochSeconds();
+                        const std::string request_host =
+                            context.context_.socket_fd.getServerIp()
+                                .toString() +
+                            ":" +
+                            context.context_.socket_fd.getServerPort()
+                                .toString();
+                        const std::string msg =
+                            std::string("Host: ") + request_host +
+                            " Received TCP packet top from " +
+                            context.context_.socket_fd.getClientIp()
+                                .toString() +
+                            ":" +
+                            context.context_.socket_fd.getClientPort()
+                                .toString();
+                        utils::Log::info(msg);
+                    }
+                    // バッファに溜まっている分を消費する（read()しない）。
+                    Result<void> c = context.consumeRecvBufferWithoutRead_();
+                    if (c.isError())
+                        return c;
 
-                const std::string request_host =
-                    context.context_.socket_fd.getServerIp().toString() + ":" +
-                    context.context_.socket_fd.getServerPort().toString();
-                const std::string msg =
-                    std::string("Host: ") + request_host +
-                    " Received TCP packet top from " +
-                    context.context_.socket_fd.getClientIp().toString() + ":" +
-                    context.context_.socket_fd.getClientPort().toString();
-                utils::Log::info(msg);
+                    // バックプレッシャーが解除した場合に更新する
+                    if (context.context_.in_read_backpressure &&
+                        context.context_.recv_buffer.size() <
+                            HttpSession::kMaxRecvBufferBytes)
+                        context.context_.in_read_backpressure = false;
+                }
             }
         }
         // context_.recv_buffer サイズに応じた read watch のON/OFF を反映する。

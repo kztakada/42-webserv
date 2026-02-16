@@ -1,6 +1,5 @@
 #include "server/session/fd/tcp_socket/tcp_connection_socket_fd.hpp"
 
-#include <sys/socket.h>
 #include <unistd.h>
 
 namespace server
@@ -66,7 +65,7 @@ void TcpConnectionSocketFd::shutdown()
 {
     if (!is_shutdown_ && fd_ >= 0)
     {
-        ::shutdown(fd_, SHUT_RDWR);
+        // ::shutdown(fd_, SHUT_RDWR);
         is_shutdown_ = true;
     }
 }

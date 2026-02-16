@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "server/session/fd_session/http_session.hpp"
+#include "utils/data_type.hpp"
 #include "utils/log.hpp"
 
 namespace server
@@ -205,10 +206,10 @@ Result<void> CgiSession::fillStdinBufferIfNeeded_()
         return Result<void>();
 
     // stdin_buffer_ が空に近い時だけ読み足す
-    if (stdin_buffer_.size() >= 4096)
+    if (stdin_buffer_.size() >= utils::kPageSizeMin)
         return Result<void>();
 
-    char buf[4096];
+    char buf[utils::kPageSizeMin];
     const ssize_t n = ::read(request_body_fd_, buf, sizeof(buf));
     if (n < 0)  // -1 は "今は進めない" として扱う。
     {

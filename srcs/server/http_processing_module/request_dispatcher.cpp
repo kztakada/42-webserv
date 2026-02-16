@@ -489,6 +489,8 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
             "finalizeUploadStore failed:", fu.getErrorMessage());
         if (fu.getErrorMessage() == "forbidden")
             return new SendErrorAction(http::HttpStatus::FORBIDDEN);
+        if (fu.getErrorMessage() == "read() failed")
+            return new SendErrorAction(http::HttpStatus::SERVER_ERROR);
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 

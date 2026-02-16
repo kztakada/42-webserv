@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include "utils/data_type.hpp"
+
 namespace server
 {
 
@@ -33,7 +35,7 @@ void IoBuffer::consume(size_t n)
     read_pos_ += n;
 
     // 軽いコンパクション（先頭側が大きく空いたら詰める）
-    if (read_pos_ > 4096)
+    if (read_pos_ > utils::kPageSizeMin)
     {
         const size_t remaining = size();
         std::copy(storage_.begin() + static_cast<std::ptrdiff_t>(read_pos_),
@@ -63,7 +65,7 @@ void IoBuffer::append(const std::string& s) { append(s.data(), s.size()); }
 ssize_t IoBuffer::fillFromFd(int fd)
 {
     // 読み込み量は適当なチャンク
-    char buf[4096];
+    char buf[utils::kPageSizeMin];
     ssize_t n = ::read(fd, buf, sizeof(buf));
     if (n > 0)
         append(buf, static_cast<size_t>(n));

@@ -10,7 +10,7 @@
 #include "http/header.hpp"
 #include "http/http_method.hpp"
 #include "http/status.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 #include "utils/result.hpp"
 
 namespace http

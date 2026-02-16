@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "http/status.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 #include "utils/result.hpp"
 
 namespace http

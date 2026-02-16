@@ -12,7 +12,7 @@
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
 #include "server/http_processing_module/request_processor.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 
 static std::vector<utils::Byte> toBytes_(const std::string& s)
 {

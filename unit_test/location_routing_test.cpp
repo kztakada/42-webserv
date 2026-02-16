@@ -13,7 +13,7 @@
 #include "network/port_type.hpp"
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 
 static std::vector<utils::Byte> toBytes_(const char* s)
 {

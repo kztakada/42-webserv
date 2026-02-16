@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 
 namespace server
 {

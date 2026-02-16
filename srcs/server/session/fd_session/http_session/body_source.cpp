@@ -52,11 +52,7 @@ Result<BodySource::ReadResult> FileBodySource::read(size_t max_bytes)
 
     if (n < 0)
     {
-        r.data.clear();
-        // 実装規定: read/write 後の errno 分岐は禁止。
-        // -1 は "今は読めない" として扱い、致命エラーは reactor 側で検出する。
-        r.status = READ_WOULD_BLOCK;
-        return r;
+        return Result<ReadResult>(ERROR, "FileBodySource read failed");
     }
 
     if (n == 0)
@@ -105,10 +101,7 @@ Result<BodySource::ReadResult> CgiBodySource::read(size_t max_bytes)
 
     if (n < 0)
     {
-        r.data.clear();
-        // 実装規定: read/write 後の errno 分岐は禁止。
-        r.status = READ_WOULD_BLOCK;
-        return r;
+        return Result<ReadResult>(ERROR, "CgiBodySource read failed");
     }
 
     if (n == 0)
@@ -172,9 +165,7 @@ Result<BodySource::ReadResult> PrefetchedFdBodySource::read(size_t max_bytes)
 
     if (n < 0)
     {
-        r.data.clear();
-        r.status = READ_WOULD_BLOCK;
-        return r;
+        return Result<ReadResult>(ERROR, "PrefetchedFdBodySource read failed");
     }
 
     if (n == 0)

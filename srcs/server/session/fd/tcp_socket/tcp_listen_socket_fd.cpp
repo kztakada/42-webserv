@@ -92,7 +92,8 @@ Result<TcpListenSocketFd*> TcpListenSocketFd::listenOn(
         return Result<TcpListenSocketFd*>(ERROR, "socket() failed");
 
     int yes = 1;
-    (void)::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    (void)::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes,
+        sizeof(yes));  // 再起動直後にポートの再利用を許可するため
 
     struct sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
@@ -158,7 +159,8 @@ Result<TcpConnectionSocketFd*> TcpListenSocketFd::accept()
             if (nb.isError())
             {
                 ::close(conn_fd);
-                return Result<TcpConnectionSocketFd*>(ERROR, nb.getErrorMessage());
+                return Result<TcpConnectionSocketFd*>(
+                    ERROR, nb.getErrorMessage());
             }
 
             SocketAddress client_socket_addr(client_addr);

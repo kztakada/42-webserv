@@ -18,6 +18,11 @@ Result<void> ExecuteCgiState::handleEvent(
         {
             const ssize_t n = context.context_.recv_buffer.fillFromFd(
                 context.context_.socket_fd.getFd());
+            if (n < 0)
+            {
+                context.changeState(new CloseWaitState());
+                return Result<void>(ERROR, "event fd read failed");
+            }
             if (n == 0)
             {
                 context.context_.peer_closed = true;

@@ -4,7 +4,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <cerrno>
 #include <vector>
 
 namespace utils
@@ -48,19 +47,14 @@ Result<std::string> getCurrentWorkingDirectory()
         struct stat parent;
 
         if (::stat(".", &cur) != 0)
-        {
             return Result<std::string>(ERROR, std::string(), "stat(.) failed");
-        }
+
         if (::stat("..", &parent) != 0)
-        {
             return Result<std::string>(ERROR, std::string(), "stat(..) failed");
-        }
 
         // ルートディレクトリでは '.' と '..' が同じ inode/dev になる
         if (cur.st_ino == parent.st_ino && cur.st_dev == parent.st_dev)
-        {
             break;
-        }
 
         DIR* dp = ::opendir("..");
         if (dp == NULL)
@@ -79,9 +73,8 @@ Result<std::string> getCurrentWorkingDirectory()
             std::string candidate = std::string("../") + ent->d_name;
             struct stat st;
             if (::stat(candidate.c_str(), &st) != 0)
-            {
                 continue;
-            }
+
             if (st.st_ino == cur.st_ino && st.st_dev == cur.st_dev)
             {
                 child_name = ent->d_name;
@@ -115,9 +108,7 @@ Result<std::string> getCurrentWorkingDirectory()
     {
         abs_path += *it;
         if (it + 1 != components.rend())
-        {
             abs_path += "/";
-        }
     }
 
     // 元のディレクトリへ戻す
@@ -176,9 +167,7 @@ static Result<std::string> normalizePhysicalAbsolutePath_(
     {
         out += parts[i];
         if (i + 1 < parts.size())
-        {
             out += "/";
-        }
     }
     return Result<std::string>(out);
 }
@@ -187,38 +176,31 @@ static bool isUnderRootPhysical_(
     const std::string& root_physical, const std::string& cur_physical)
 {
     if (root_physical.empty() || root_physical[0] != '/')
-    {
         return false;
-    }
+
     if (root_physical == "/")
-    {
         return !cur_physical.empty() && cur_physical[0] == '/';
-    }
+
     if (cur_physical == root_physical)
-    {
         return true;
-    }
+
     if (cur_physical.size() <= root_physical.size())
-    {
         return false;
-    }
+
     if (cur_physical.compare(0, root_physical.size(), root_physical) != 0)
-    {
         return false;
-    }
+
     return cur_physical[root_physical.size()] == '/';
 }
 
 static Result<void> validateUriPathForUnderRoot_(const std::string& uri_path)
 {
     if (uri_path.empty() || uri_path[0] != '/')
-    {
         return Result<void>(ERROR, "uri path must start with '/'");
-    }
+
     if (containsNul_(uri_path))
-    {
         return Result<void>(ERROR, "uri path contains NUL");
-    }
+
     return Result<void>();
 }
 
@@ -232,9 +214,8 @@ static std::vector<std::string> splitUriSegments_(const std::string& uri_path)
         if (c == '/')
         {
             if (!token.empty())
-            {
                 out.push_back(token);
-            }
+
             token.clear();
         }
         else
@@ -249,27 +230,21 @@ Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
     const std::string& uri_path, bool allow_nonexistent_leaf)
 {
     if (root_dir.empty())
-    {
         return Result<PhysicalPath>(ERROR, "root_dir is empty");
-    }
+
     Result<void> v = validateUriPathForUnderRoot_(uri_path);
     if (v.isError())
-    {
         return Result<PhysicalPath>(ERROR, v.getErrorMessage());
-    }
 
     // 元の cwd を保存
     Result<std::string> original_cwd = getCurrentWorkingDirectory();
     if (original_cwd.isError())
-    {
         return Result<PhysicalPath>(ERROR, "failed to get cwd");
-    }
 
     // root_dir へ移動し、root の物理パスを確定
     if (::chdir(root_dir.str().c_str()) != 0)
-    {
         return Result<PhysicalPath>(ERROR, "failed to chdir to root_dir");
-    }
+
     Result<std::string> root_physical = getCurrentWorkingDirectory();
     if (root_physical.isError())
     {
@@ -309,9 +284,8 @@ Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
                 Result<PhysicalPath> leaf =
                     PhysicalPath::resolveWithCwd(seg, cur_physical.unwrap());
                 if (leaf.isError())
-                {
                     return Result<PhysicalPath>(ERROR, leaf.getErrorMessage());
-                }
+
                 return leaf;
             }
 
@@ -359,9 +333,8 @@ Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
         Result<PhysicalPath> leaf =
             PhysicalPath::resolveWithCwd(seg, cur_physical.unwrap());
         if (leaf.isError())
-        {
             return Result<PhysicalPath>(ERROR, leaf.getErrorMessage());
-        }
+
         return leaf;
     }
 
@@ -371,15 +344,13 @@ Result<PhysicalPath> resolvePhysicalPathUnderRoot(const PhysicalPath& root_dir,
     (void)::chdir(original_cwd.unwrap().c_str());
     if (cur_physical.isError() ||
         !isUnderRootPhysical_(root_physical.unwrap(), cur_physical.unwrap()))
-    {
         return Result<PhysicalPath>(ERROR, "path escapes root_dir (physical)");
-    }
+
     Result<PhysicalPath> cur_as_path =
         PhysicalPath::resolve(cur_physical.unwrap());
     if (cur_as_path.isError())
-    {
         return Result<PhysicalPath>(ERROR, cur_as_path.getErrorMessage());
-    }
+
     return cur_as_path;
 }
 
@@ -393,17 +364,13 @@ Result<std::string> resolvePhysicalPathWithCwd(
     const std::string& path_str, const std::string& cwd)
 {
     if (path_str.empty())
-    {
         return Result<std::string>(ERROR, std::string(), "path is empty");
-    }
+
     if (containsNul_(path_str))
-    {
         return Result<std::string>(ERROR, std::string(), "path contains NUL");
-    }
+
     if (cwd.empty() || cwd[0] != '/')
-    {
         return Result<std::string>(ERROR, std::string(), "cwd is invalid");
-    }
 
     std::string abs;
     if (!path_str.empty() && path_str[0] == '/')
@@ -429,9 +396,8 @@ Result<std::string> resolvePhysicalPath(const std::string& path_str)
 {
     Result<std::string> cwd = getCurrentWorkingDirectory();
     if (cwd.isError())
-    {
         return Result<std::string>(ERROR, std::string(), "failed to get cwd");
-    }
+
     return resolvePhysicalPathWithCwd(path_str, cwd.unwrap());
 }
 

@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "server/session/fd_session/http_session.hpp"
+#include "utils/data_type.hpp"
 #include "utils/log.hpp"
 
 namespace server
@@ -205,17 +206,13 @@ Result<void> CgiSession::fillStdinBufferIfNeeded_()
         return Result<void>();
 
     // stdin_buffer_ が空に近い時だけ読み足す
-    if (stdin_buffer_.size() >= 4096)
+    if (stdin_buffer_.size() >= utils::kPageSizeMin)
         return Result<void>();
 
-    char buf[4096];
+    char buf[utils::kPageSizeMin];
     const ssize_t n = ::read(request_body_fd_, buf, sizeof(buf));
-    if (n < 0)  // -1 は "今は進めない" として扱う。
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+    if (n < 0)
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (n == 0)
     {
@@ -256,11 +253,10 @@ Result<void> CgiSession::handleStdin_(FdEventType type)
     {
         const ssize_t w = stdin_buffer_.flushToFd(pipe_in_.getFd());
         if (w < 0)
+            return Result<void>(ERROR, "internal fd write failed");
+        if (w == 0)
         {
-            if (processing_log_ != NULL)
-                processing_log_->incrementBlockIo();  // ログ計測
-            // 実装規定: write 後の errno 分岐は禁止。
-            return Result<void>();
+            // ノンブロッキング接続に対してはスルー
         }
     }
 
@@ -331,13 +327,8 @@ Result<void> CgiSession::handleStdout_(FdEventType type)
 
     const ssize_t r = stdout_buffer_.fillFromFd(pipe_out_.getFd());
 
-    // 実装規定: read 後の errno 分岐は禁止。
     if (r < 0)
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (r == 0)
     {
@@ -358,11 +349,7 @@ Result<void> CgiSession::handleStderr_(FdEventType type)
 
     const ssize_t r = stderr_buffer_.fillFromFd(pipe_err_.getFd());
     if (r < 0)
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (r == 0)
     {

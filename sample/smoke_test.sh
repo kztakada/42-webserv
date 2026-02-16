@@ -212,6 +212,19 @@ run_sample sample/04_cgi/webserv.conf bash -lc '
   echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
   echo "$r" | grep -q "body=jkl"
 
+  # --- CGI by index: directory URI が index(hello.sh) に解決された場合も CGI 実行される ---
+  r=$(curl -sS -i "http://127.0.0.1:18084/index_cgi/?lang=index")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -qi "^Content-Type: text/plain"
+  echo "$r" | grep -q "bash ok"
+  echo "$r" | grep -q "method=GET"
+  echo "$r" | grep -q "query=lang=index"
+
+  r=$(curl -sS -i -X POST "http://127.0.0.1:18084/index_cgi/" --data "mno")
+  echo "$r" | head -n1 | grep -Eq "^HTTP/1\\.[01] 200"
+  echo "$r" | grep -q "method=POST"
+  echo "$r" | grep -q "body=mno"
+
   # --- CGI stdin binary: body 内に \0 を含んでも全文が CGI に渡る ---
   tmp_nul=$(mktemp /tmp/webserv_cgi_nul_XXXXXX.bin)
   cleanup_nul() { rm -f "$tmp_nul"; }

@@ -148,6 +148,18 @@ std::vector<std::string> LocationDirective::buildIndexCandidatePaths(
     return candidates;
 }
 
+std::vector<std::string> LocationDirective::buildIndexCandidateUriPaths(
+    const std::string& request_path) const
+{
+    std::vector<std::string> candidates;
+    candidates.reserve(conf_.index_pages.size());
+    for (size_t i = 0; i < conf_.index_pages.size(); ++i)
+    {
+        candidates.push_back(joinPath_(request_path, conf_.index_pages[i]));
+    }
+    return candidates;
+}
+
 bool LocationDirective::isMethodAllowed(const http::HttpMethod& method) const
 {
     return conf_.allowed_methods.find(method) != conf_.allowed_methods.end();

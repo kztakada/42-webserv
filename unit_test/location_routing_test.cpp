@@ -13,7 +13,7 @@
 #include "network/port_type.hpp"
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 
 static std::vector<utils::Byte> toBytes_(const char* s)
 {
@@ -544,4 +544,40 @@ TEST(LocationRouting, CgiContextSplitsScriptNameAndPathInfo)
     EXPECT_EQ(c.unwrap().path_info, std::string("/hoge"));
     EXPECT_EQ(c.unwrap().query_string, std::string("a=b"));
     EXPECT_EQ(c.unwrap().script_filename.str(), root + "/test.cgi");
+}
+
+TEST(LocationRouting, DirectoryIndexCgiRunsCgi)
+{
+    const std::string root = makeTempDirOrDie_();
+
+    // index CGI script
+    writeFileOrDie_(root + "/hello.sh",
+        "#!/bin/sh\necho 'Status: 200'\necho\necho hello\n");
+    ASSERT_EQ(0, ::chmod((root + "/hello.sh").c_str(), 0755));
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/").isOk());
+    ASSERT_TRUE(loc.setRootDir(root).isOk());
+    ASSERT_TRUE(loc.appendIndexPage("hello.sh").isOk());
+    ASSERT_TRUE(loc.appendCgiExtension(".sh", "/bin/sh").isOk());
+
+    server::VirtualServer vserver =
+        makeVirtualServerWithSingleLocation(loc, root, "8080");
+    const server::LocationDirective* matched = vserver.findLocationByPath("/");
+    ASSERT_TRUE(matched != NULL);
+
+    http::HttpRequest req = makeGet_("/", "example.com", 1);
+    utils::result::Result<server::ResolvedRequestContext> ctx_res =
+        server::ResolvedRequestContext::create(req);
+    ASSERT_TRUE(ctx_res.isOk());
+
+    server::LocationRouting r(
+        &vserver, matched, ctx_res.unwrap(), req, http::HttpStatus::OK);
+
+    EXPECT_EQ(r.getNextAction(), server::RUN_CGI);
+    utils::result::Result<server::CgiContext> c = r.getCgiContext();
+    ASSERT_TRUE(c.isOk());
+    EXPECT_EQ(c.unwrap().script_name, std::string("/hello.sh"));
+    EXPECT_EQ(c.unwrap().path_info, std::string(""));
+    EXPECT_EQ(c.unwrap().script_filename.str(), root + "/hello.sh");
 }

@@ -12,7 +12,7 @@
 #include "server/config/server_config.hpp"
 #include "server/config/virtual_server_conf.hpp"
 #include "server/http_processing_module/request_processor.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 
 static std::vector<utils::Byte> toBytes_(const std::string& s)
 {
@@ -54,6 +54,12 @@ static void writeFileOrDie_(const std::string& p, const std::string& content)
     ASSERT_TRUE(f != NULL);
     ::fwrite(content.data(), 1, content.size(), f);
     ::fclose(f);
+}
+
+static void chmodOrDie_(const std::string& p, mode_t mode)
+{
+    int rc = ::chmod(p.c_str(), mode);
+    EXPECT_EQ(rc, 0);
 }
 
 static std::string readAll_(server::BodySource* bs)
@@ -124,6 +130,110 @@ TEST(RequestProcessor, NotFoundAppliesErrorPageAndPreserves404)
 
     std::string body = readAll_(o.body_source.get());
     EXPECT_EQ(body, std::string("Custom404"));
+
+    (void)root;
+}
+
+TEST(RequestProcessor, UnreadableIndexReturns403Not404EvenWith404ErrorPage)
+{
+    const std::string root = makeTempDirOrDie_();
+    mkdirOrDie_(root + "/errors");
+    writeFileOrDie_(root + "/errors/404.html", "Custom404");
+    writeFileOrDie_(root + "/index.html", "INDEX");
+    chmodOrDie_(root + "/index.html", 0000);
+
+    server::VirtualServerConf vs;
+    ASSERT_TRUE(vs.appendListen("", "8080").isOk());
+    ASSERT_TRUE(vs.setRootDir(root).isOk());
+    ASSERT_TRUE(
+        vs.appendErrorPage(http::HttpStatus::NOT_FOUND, "/errors/404.html")
+            .isOk());
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/").isOk());
+    ASSERT_TRUE(vs.appendLocation(loc).isOk());
+    ASSERT_TRUE(vs.isValid());
+
+    server::ServerConfig cfg;
+    ASSERT_TRUE(cfg.appendServer(vs).isOk());
+    ASSERT_TRUE(cfg.isValid());
+
+    server::RequestRouter router(cfg);
+
+    utils::result::Result<IPAddress> ip =
+        IPAddress::parseIpv4Numeric("127.0.0.1");
+    ASSERT_TRUE(ip.isOk());
+    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    ASSERT_TRUE(port.isOk());
+
+    server::RequestProcessor proc(router);
+
+    http::HttpRequest req =
+        mustParseRequest_("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n");
+
+    http::HttpResponse resp;
+    utils::result::Result<server::RequestProcessor::Output> out =
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
+    ASSERT_TRUE(out.isOk());
+
+    EXPECT_EQ(resp.getStatus().getCode(), 403u);
+
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
+    std::string body = readAll_(o.body_source.get());
+    EXPECT_NE(body, std::string("Custom404"));
+
+    (void)root;
+}
+
+TEST(RequestProcessor, UnreadableFileReturns403Not404EvenWith404ErrorPage)
+{
+    const std::string root = makeTempDirOrDie_();
+    mkdirOrDie_(root + "/errors");
+    writeFileOrDie_(root + "/errors/404.html", "Custom404");
+    writeFileOrDie_(root + "/hello.txt", "HELLO");
+    chmodOrDie_(root + "/hello.txt", 0000);
+
+    server::VirtualServerConf vs;
+    ASSERT_TRUE(vs.appendListen("", "8080").isOk());
+    ASSERT_TRUE(vs.setRootDir(root).isOk());
+    ASSERT_TRUE(
+        vs.appendErrorPage(http::HttpStatus::NOT_FOUND, "/errors/404.html")
+            .isOk());
+
+    server::LocationDirectiveConf loc;
+    ASSERT_TRUE(loc.setPathPattern("/").isOk());
+    ASSERT_TRUE(vs.appendLocation(loc).isOk());
+    ASSERT_TRUE(vs.isValid());
+
+    server::ServerConfig cfg;
+    ASSERT_TRUE(cfg.appendServer(vs).isOk());
+    ASSERT_TRUE(cfg.isValid());
+
+    server::RequestRouter router(cfg);
+
+    utils::result::Result<IPAddress> ip =
+        IPAddress::parseIpv4Numeric("127.0.0.1");
+    ASSERT_TRUE(ip.isOk());
+    utils::result::Result<PortType> port = PortType::parseNumeric("8080");
+    ASSERT_TRUE(port.isOk());
+
+    server::RequestProcessor proc(router);
+
+    http::HttpRequest req = mustParseRequest_(
+        "GET /hello.txt HTTP/1.1\r\nHost: example.com\r\n\r\n");
+
+    http::HttpResponse resp;
+    utils::result::Result<server::RequestProcessor::Output> out =
+        proc.process(req, ip.unwrap(), port.unwrap(), resp);
+    ASSERT_TRUE(out.isOk());
+
+    EXPECT_EQ(resp.getStatus().getCode(), 403u);
+
+    server::RequestProcessor::Output o = out.unwrap();
+    ASSERT_TRUE(o.body_source.get() != NULL);
+    std::string body = readAll_(o.body_source.get());
+    EXPECT_NE(body, std::string("Custom404"));
 
     (void)root;
 }

@@ -55,6 +55,12 @@ class LocationDirective
     std::vector<std::string> buildIndexCandidatePaths(
         const std::string& request_path) const;
 
+    // request_path がディレクトリURI("/", "/dir/" 等) のときの
+    // index 候補 URI パスを返す（buildIndexCandidatePaths と同じ index_pages
+    // 順）。
+    std::vector<std::string> buildIndexCandidateUriPaths(
+        const std::string& request_path) const;
+
     // ビジネスロジック
     bool isMethodAllowed(const http::HttpMethod& method) const;
     // RFC 9110 Section 10.2.6 (405) の Allow ヘッダー値を生成する。

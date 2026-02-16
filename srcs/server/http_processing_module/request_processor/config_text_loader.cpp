@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "utils/data_type.hpp"
+
 namespace server
 {
 
@@ -18,7 +20,7 @@ Result<std::string> ConfigTextLoader::readFileToString_(const std::string& path)
     }
 
     std::string out;
-    char buf[4096];
+    char buf[utils::kPageSizeMin];
     for (;;)
     {
         const ssize_t n = ::read(fd, buf, sizeof(buf));
@@ -51,7 +53,7 @@ Result<std::string> ConfigTextLoader::load(const std::string& file_name)
     if (r2.isOk())
         return r2.unwrap();
 
-    return Result<std::string>(ERROR, std::string(), "config file not found");
+    return Result<std::string>(ERROR, std::string(), "invalid config file");
 }
 
 }  // namespace server

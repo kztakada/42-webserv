@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <sstream>
@@ -62,9 +61,9 @@ static Result<void> writeAll_(int fd, const std::string& data)
         const size_t chunk = data.size() - off;
         const ssize_t w = ::write(fd, data.data() + off, chunk);
         if (w < 0)
-            return Result<void>(ERROR, "write() failed");
+            return Result<void>(ERROR, "internal fd write failed");
         if (w == 0)
-            return Result<void>(ERROR, "write() returned 0");
+            return Result<void>(ERROR, "internal fd write failed");
         off += static_cast<size_t>(w);
     }
     return Result<void>();
@@ -181,7 +180,7 @@ class MultipartStream
         char buf[8192];
         const ssize_t n = ::read(fd_, buf, sizeof(buf));
         if (n < 0)
-            return Result<bool>(ERROR, "read() failed");
+            return Result<bool>(ERROR, "internal fd read failed");
         if (n == 0)
             return false;
         buf_.append(buf, static_cast<size_t>(n));
@@ -359,7 +358,7 @@ static Result<void> copyFdToFd_(int in_fd, int out_fd)
     {
         const ssize_t n = ::read(in_fd, buf, sizeof(buf));
         if (n < 0)
-            return Result<void>(ERROR, "read() failed");
+            return Result<void>(ERROR, "internal fd read failed");
         if (n == 0)
             break;
         Result<void> w =
@@ -490,6 +489,9 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
             "finalizeUploadStore failed:", fu.getErrorMessage());
         if (fu.getErrorMessage() == "forbidden")
             return new SendErrorAction(http::HttpStatus::FORBIDDEN);
+        if (fu.getErrorMessage() == "internal fd read failed" ||
+            fu.getErrorMessage() == "internal fd write failed")
+            return new SendErrorAction(http::HttpStatus::SERVER_ERROR);
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }
 
@@ -683,10 +685,7 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
                 if (out_fd < 0)
                 {
                     ::close(in_fd);
-                    std::ostringstream oss;
-                    oss << "open() failed: " << out_path << ": "
-                        << std::strerror(errno);
-                    return Result<void>(ERROR, oss.str());
+                    return Result<void>(ERROR, "open() failed");
                 }
             }
 
@@ -736,10 +735,7 @@ Result<void> RequestDispatcher::finalizeUploadStoreIfNeeded_(
         if (out_fd < 0)
         {
             ::close(in_fd);
-            std::ostringstream oss;
-            oss << "open() failed: " << out_path << ": "
-                << std::strerror(errno);
-            return Result<void>(ERROR, oss.str());
+            return Result<void>(ERROR, "open() failed");
         }
         Result<void> c = copyFdToFd_(in_fd, out_fd);
         ::close(out_fd);

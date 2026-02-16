@@ -10,7 +10,7 @@
 #include "server/http_processing_module/request_router/location_directive.hpp"
 #include "server/http_processing_module/request_router/resolved_request_context.hpp"
 #include "server/http_processing_module/request_router/virtual_server.hpp"
-#include "utils/byte.hpp"
+#include "utils/data_type.hpp"
 #include "utils/path.hpp"
 #include "utils/result.hpp"
 
@@ -132,8 +132,17 @@ class LocationRouting
     std::string redirect_location_;
     std::string query_string_;
 
+    // request path 自体が拡張子マッチしない場合でも、
+    // ディレクトリURIの index が CGI のときに RUN_CGI を成立させるための
+    // override 情報。
+    std::string cgi_script_name_override_;
+    utils::path::PhysicalPath cgi_script_filename_override_;
+    utils::path::PhysicalPath cgi_executor_override_;
+
     Result<void> decideAction_(const http::HttpRequest& req);
     Result<void> applyErrorPageOrRespondError_();
+
+    Result<void> tryApplyCgiByIndexIfDirectory_();
 
     Result<void> validateActionIs_(
         ActionType expected, const std::string& api_name) const;

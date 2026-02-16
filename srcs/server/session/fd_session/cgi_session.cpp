@@ -211,12 +211,8 @@ Result<void> CgiSession::fillStdinBufferIfNeeded_()
 
     char buf[utils::kPageSizeMin];
     const ssize_t n = ::read(request_body_fd_, buf, sizeof(buf));
-    if (n < 0)  // -1 は "今は進めない" として扱う。
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+    if (n < 0)
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (n == 0)
     {

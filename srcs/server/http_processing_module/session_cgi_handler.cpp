@@ -225,9 +225,10 @@ Result<void> SessionCgiHandler::handleCgiError_(
     RequestProcessor::Output out;
     http::HttpStatus st = http::HttpStatus::BAD_GATEWAY;
     if (message.find("timeout") != std::string::npos)
-    {
         st = http::HttpStatus::GATEWAY_TIMEOUT;
-    }
+    if (message.find("internal fd read failed") != std::string::npos)
+        st = http::HttpStatus::SERVER_ERROR;
+
     Result<void> bo = session.buildErrorOutput_(st, &out);
     if (bo.isError())
     {

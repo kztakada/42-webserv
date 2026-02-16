@@ -180,7 +180,7 @@ class MultipartStream
         char buf[8192];
         const ssize_t n = ::read(fd_, buf, sizeof(buf));
         if (n < 0)
-            return Result<bool>(ERROR, "read() failed");
+            return Result<bool>(ERROR, "internal fd read failed");
         if (n == 0)
             return false;
         buf_.append(buf, static_cast<size_t>(n));
@@ -358,7 +358,7 @@ static Result<void> copyFdToFd_(int in_fd, int out_fd)
     {
         const ssize_t n = ::read(in_fd, buf, sizeof(buf));
         if (n < 0)
-            return Result<void>(ERROR, "read() failed");
+            return Result<void>(ERROR, "internal fd read failed");
         if (n == 0)
             break;
         Result<void> w =
@@ -489,7 +489,7 @@ Result<IRequestAction*> RequestDispatcher::dispatch(SessionContext& ctx)
             "finalizeUploadStore failed:", fu.getErrorMessage());
         if (fu.getErrorMessage() == "forbidden")
             return new SendErrorAction(http::HttpStatus::FORBIDDEN);
-        if (fu.getErrorMessage() == "read() failed")
+        if (fu.getErrorMessage() == "internal fd read failed")
             return new SendErrorAction(http::HttpStatus::SERVER_ERROR);
         return new SendErrorAction(http::HttpStatus::BAD_REQUEST);
     }

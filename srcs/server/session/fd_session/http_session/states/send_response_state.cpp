@@ -117,15 +117,12 @@ Result<void> SendResponseState::handleEvent(
             context.context_.socket_fd.getFd());
         if (n < 0)
         {
-            if (context.processingLog() != NULL)
-                context.processingLog()->incrementBlockIo();  // ログ計測
-            // バックプレッシャー発生時ログ出力
-            if (!context.context_.in_write_backpressure)
-            {
-                context.context_.in_write_backpressure = true;
-                utils::Log::warning("Write BackPressure occurred");
-            }
-            return Result<void>();
+            context.changeState(new CloseWaitState());
+            return Result<void>(ERROR, "event fd write failed");
+        }
+        if (n == 0)
+        {
+            // ノンブロッキング接続に対してはスルー
         }
         // バックプレッシャーログ出力後、解除する
         if (n > 0 && context.context_.in_write_backpressure)

@@ -100,16 +100,27 @@ Result<void> FdSessionController::delegateSession(FdSession* session)
     if (session == NULL)
         return Result<void>(ERROR, "null session");
 
-    active_sessions_.insert(session);
-
     std::vector<FdSession::FdWatchSpec> specs;
     session->getInitialWatchSpecs(&specs);
+
+    // 途中で失敗した場合に rollback できるよう、登録済みfdを記録する。
+    std::vector<int> registered_fds;
+
+    active_sessions_.insert(session);
     for (size_t i = 0; i < specs.size(); ++i)
     {
         Result<void> r = setWatch(
             specs[i].fd, session, specs[i].watch_read, specs[i].watch_write);
         if (r.isError())
+        {
+            for (size_t j = 0; j < registered_fds.size(); ++j)
+                unregisterFd(registered_fds[j]);
+            active_sessions_.erase(session);
             return r;
+        }
+
+        if (specs[i].watch_read || specs[i].watch_write)
+            registered_fds.push_back(specs[i].fd);
     }
     return Result<void>();
 }
@@ -126,9 +137,36 @@ void FdSessionController::requestDelete(FdSession* session)
 
     // 関連fdのwatchを解除
     detachAllFdsFromSession_(session);
+    // session_fds_ が壊れていても reactor watch
+    // が残らないように保険で掃除する。
+    detachAllFdsFromSessionFallback_(session);
 
     // dispatch バッチ末尾で delete
     deferred_delete_.push_back(session);
+}
+
+void FdSessionController::detachAllFdsFromSessionFallback_(FdSession* session)
+{
+    if (session == NULL)
+        return;
+
+    std::vector<int> fds;
+    for (std::map<int, FdWatchState>::iterator it = fd_watch_state_.begin();
+        it != fd_watch_state_.end(); ++it)
+    {
+        if (it->second.session == session)
+            fds.push_back(it->first);
+    }
+
+    for (size_t i = 0; i < fds.size(); ++i)
+    {
+        const int fd = fds[i];
+        if (reactor_ != NULL)
+        {
+            (void)reactor_->deleteWatch(fd);
+        }
+        detachFdFromSession_(fd);
+    }
 }
 
 Result<void> FdSessionController::setWatch(
@@ -289,10 +327,19 @@ void FdSessionController::dispatchEvents(
         {
             continue;
         }
+        // reactor 側に「削除済みSessionのイベント」が残ることがあるため、
+        // controller が管理していない pointer は絶対に触らない。
+        if (active_sessions_.find(session) == active_sessions_.end() &&
+            deleting_sessions_.find(session) == deleting_sessions_.end())
+        {
+            continue;
+        }
         if (deleting_sessions_.find(session) != deleting_sessions_.end())
             continue;
 
         session->handleEvent(event);
+        if (deleting_sessions_.find(session) != deleting_sessions_.end())
+            continue;
 
         // controller 主導でも回収する（session側が requestDelete
         // を呼ばなくても安全）

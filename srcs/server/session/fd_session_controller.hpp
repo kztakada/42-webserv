@@ -82,6 +82,7 @@ class FdSessionController
         int fd, FdSession* session, bool want_read, bool want_write);
     void detachFdFromSession_(int fd);
     void detachAllFdsFromSession_(FdSession* session);
+    void detachAllFdsFromSessionFallback_(FdSession* session);
 };
 }  // namespace server
 

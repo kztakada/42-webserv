@@ -7,6 +7,12 @@ OBJS_DIR = objs
 OBJS := $(SRCS:%.cpp=$(OBJS_DIR)/%.o)
 DEPENDENCIES := $(OBJS:.o=.d)
 
+LDFLAGS :=
+
+# CXXFLAGS が変わっても make は自動で .o を作り直さないため、
+# フラグを stamp に記録して差分があれば .o を再生成させる。
+CXXFLAGS_STAMP := $(OBJS_DIR)/.cxxflags
+
 TEST_OBJS_DIR = objs_test
 
 CXXFLAGS := -I$(SRCS_DIR) --std=c++98 -Wall -Wextra -Werror -pedantic
@@ -14,7 +20,16 @@ CXXFLAGS := -I$(SRCS_DIR) --std=c++98 -Wall -Wextra -Werror -pedantic
 
 all: $(NAME)
 
-$(OBJS_DIR)/%.o: %.cpp
+$(CXXFLAGS_STAMP):
+	@mkdir -p $(OBJS_DIR)
+	@printf "%s\n" "$(CXXFLAGS) $(LDFLAGS)" > $(OBJS_DIR)/.cxxflags.tmp
+	@if [ ! -f $@ ] || ! cmp -s $(OBJS_DIR)/.cxxflags.tmp $@; then \
+		mv $(OBJS_DIR)/.cxxflags.tmp $@; \
+	else \
+		rm -f $(OBJS_DIR)/.cxxflags.tmp; \
+	fi
+
+$(OBJS_DIR)/%.o: %.cpp $(CXXFLAGS_STAMP)
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c $< -MMD -MP -o $@
 
@@ -26,7 +41,7 @@ $(TEST_OBJS_DIR)/%.o: %.cpp
 
 
 $(NAME): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(NAME) $^
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(NAME) $^
 
 clean:
 	$(RM) $(OBJS) $(DEPENDENCIES)
@@ -41,7 +56,7 @@ re:
 
 debug:
 	$(MAKE) fclean
-	$(MAKE) all CXXFLAGS='$(CXXFLAGS) -DDEBUG'
+	$(MAKE) all CXXFLAGS='$(CXXFLAGS) -DDEBUG -O1 -g -fsanitize=address'
 
 .PHONY: all re debug clean fclean
 

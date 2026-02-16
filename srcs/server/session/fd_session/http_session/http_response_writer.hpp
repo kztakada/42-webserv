@@ -37,6 +37,11 @@ class HttpResponseWriter
     // send_buffer に追加できる分だけエンコードして積む（ソケットwriteは別）
     Result<PumpResult> pump(IoBuffer& send_buffer);
 
+    // エラー等で body をこれ以上送れない場合に、可能ならレスポンスの終端を
+    // send_buffer に積む。chunked の場合は "0\r\n\r\n" を送る。
+    // close-delimited の場合は何も積まれない（接続 close が EOF）。
+    Result<void> writeEof(IoBuffer& send_buffer);
+
    private:
     static const size_t kDefaultChunkBytes = 8192;
 

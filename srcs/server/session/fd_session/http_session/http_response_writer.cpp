@@ -114,4 +114,36 @@ Result<HttpResponseWriter::PumpResult> HttpResponseWriter::pump(
     return pr;
 }
 
+Result<void> HttpResponseWriter::writeEof(IoBuffer& send_buffer)
+{
+    if (eof_written_ || response_.isComplete())
+        return Result<void>();
+
+    if (!header_written_)
+    {
+        Result<std::vector<utils::Byte> > h = encoder_.encodeHeader(response_);
+        if (h.isError())
+            return Result<void>(ERROR, h.getErrorMessage());
+
+        const std::vector<utils::Byte>& bytes = h.unwrap();
+        if (!bytes.empty())
+            send_buffer.append(
+                reinterpret_cast<const char*>(&bytes[0]), bytes.size());
+
+        header_written_ = true;
+    }
+
+    Result<std::vector<utils::Byte> > eof = encoder_.encodeEof(response_);
+    if (eof.isError())
+        return Result<void>(ERROR, eof.getErrorMessage());
+
+    const std::vector<utils::Byte>& bytes = eof.unwrap();
+    if (!bytes.empty())
+        send_buffer.append(
+            reinterpret_cast<const char*>(&bytes[0]), bytes.size());
+
+    eof_written_ = true;
+    return Result<void>();
+}
+
 }  // namespace server

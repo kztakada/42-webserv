@@ -22,6 +22,33 @@ Result<void> SendResponseState::switchToInternalServerErrorAndClose_(
     session.clearBodyWatch_();
     session.context_.pause_write_until_body_ready = false;
 
+    // ヘッダが既に送出済み（例: chunked の途中）で 500 に差し替えると、
+    // 送信中のレスポンスの後ろに別の HTTP レスポンスを混ぜてしまい、
+    // クライアント側で chunked フォーマットが壊れる。
+    // この場合は 500 を送らず、可能なら EOF(終端)だけ送って接続を閉じる。
+    if (session.context_.response.phase() !=
+        http::HttpResponse::kWaitingForHeaders)
+    {
+        session.context_.should_close_connection = true;
+
+        if (session.context_.response_writer != NULL &&
+            !session.context_.response.isComplete())
+        {
+            Result<void> we = session.context_.response_writer->writeEof(
+                session.context_.send_buffer);
+            if (we.isError())
+            {
+                session.changeState(new CloseWaitState());
+                session.context_.socket_fd.shutdown();
+                session.controller_.requestDelete(&session);
+                return Result<void>();
+            }
+        }
+
+        (void)session.updateSocketWatches_();
+        return Result<void>();
+    }
+
     // 送信途中のデータは破棄し、500 に差し替える。
     session.context_.send_buffer.consume(session.context_.send_buffer.size());
 
@@ -124,6 +151,18 @@ Result<void> SendResponseState::handleEvent(
     // 送信バッファが空なら積む
     if (context.context_.send_buffer.size() == 0)
     {
+        // body fd を watch している（典型: CGI stdout）場合、write イベントで
+        // body を read しに行くと「まだ body が来ていない」タイミングで
+        // read(-1) となり、送信途中に 500 を差し込む原因になる。 send_buffer
+        // が空で response が未完了なら、body の read イベントを待つ。
+        if (context.context_.body_watch_fd >= 0 &&
+            !context.context_.response.isComplete())
+        {
+            context.context_.pause_write_until_body_ready = true;
+            (void)context.updateSocketWatches_();
+            return Result<void>();
+        }
+
         Result<HttpResponseWriter::PumpResult> pumped =
             context.context_.response_writer->pump(
                 context.context_.send_buffer);

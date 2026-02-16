@@ -249,10 +249,15 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
                 Result<std::string> body = autoindex_renderer_.buildBody(ctx);
                 if (body.isError())
                 {
+                    http::HttpStatus error_status = http::HttpStatus::FORBIDDEN;
+                    if (body.getErrorMessage() ==
+                        "autoindex template/css missing")
+                        error_status = http::HttpStatus::SERVER_ERROR;
+
                     http::HttpRequest next;
                     if (tryInternalRedirect_(internal_redirect_, router_,
                             server_ip, server_port, state->current,
-                            http::HttpStatus::FORBIDDEN, state, &next))
+                            error_status, state, &next))
                     {
                         HandlerResult res;
                         res.should_continue = true;
@@ -260,8 +265,8 @@ Result<HandlerResult> StaticAutoIndexHandler::handle(
                         return res;
                     }
 
-                    Result<RequestProcessorOutput> r = error_renderer_.respond(
-                        http::HttpStatus::FORBIDDEN, out_response);
+                    Result<RequestProcessorOutput> r =
+                        error_renderer_.respond(error_status, out_response);
                     if (r.isError())
                         return Result<HandlerResult>(
                             ERROR, r.getErrorMessage());

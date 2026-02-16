@@ -253,10 +253,10 @@ Result<void> CgiSession::handleStdin_(FdEventType type)
     {
         const ssize_t w = stdin_buffer_.flushToFd(pipe_in_.getFd());
         if (w < 0)
+            return Result<void>(ERROR, "internal fd write failed");
+        if (w == 0)
         {
-            if (processing_log_ != NULL)
-                processing_log_->incrementBlockIo();  // ログ計測
-            return Result<void>();
+            // ノンブロッキング接続に対してはスルー
         }
     }
 
@@ -328,11 +328,7 @@ Result<void> CgiSession::handleStdout_(FdEventType type)
     const ssize_t r = stdout_buffer_.fillFromFd(pipe_out_.getFd());
 
     if (r < 0)
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (r == 0)
     {
@@ -353,11 +349,7 @@ Result<void> CgiSession::handleStderr_(FdEventType type)
 
     const ssize_t r = stderr_buffer_.fillFromFd(pipe_err_.getFd());
     if (r < 0)
-    {
-        if (processing_log_ != NULL)
-            processing_log_->incrementBlockIo();  // ログ計測
-        return Result<void>();
-    }
+        return Result<void>(ERROR, "internal fd read failed");
 
     if (r == 0)
     {

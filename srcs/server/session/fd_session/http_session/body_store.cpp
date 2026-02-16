@@ -44,9 +44,9 @@ static Result<void> writeAll(int fd, const utils::Byte* data, size_t len)
         const size_t chunk = len - off;
         const ssize_t w = ::write(fd, data + off, chunk);
         if (w < 0)
-            return Result<void>(ERROR, "write() failed");
+            return Result<void>(ERROR, "internal fd write failed");
         if (w == 0)
-            return Result<void>(ERROR, "write() returned 0");
+            return Result<void>(ERROR, "internal fd write failed");
         off += static_cast<size_t>(w);
     }
     return Result<void>();

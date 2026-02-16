@@ -63,7 +63,7 @@ static Result<void> writeAll_(int fd, const std::string& data)
         if (w < 0)
             return Result<void>(ERROR, "internal fd write failed");
         if (w == 0)
-            return Result<void>(ERROR, "write() returned 0");
+            return Result<void>(ERROR, "internal fd write failed");
         off += static_cast<size_t>(w);
     }
     return Result<void>();

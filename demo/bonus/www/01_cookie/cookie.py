@@ -7,12 +7,12 @@ def parse_cookie_id(cookie_header: str, name: str) -> str:
     # Cookie: a=b; c=d
     parts = cookie_header.split(';')
     for part in parts:
-        p = part.strip()
+        p = part.strip() # 後ろに続く空白削除
         if not p:
             continue
         if '=' not in p:
             continue
-        k, v = p.split('=', 1)
+        k, v = p.split('=', 1) # 1は最大分割数
         if k.strip() == name:
             return v.strip()
     return ''
@@ -25,7 +25,7 @@ def main() -> None:
 
     is_new = False
     if cid == '':
-        cid = str(uuid.uuid4())
+        cid = str(uuid.uuid4()) # 122ビット分のランダムな値
         is_new = True
 
     # CGI headers

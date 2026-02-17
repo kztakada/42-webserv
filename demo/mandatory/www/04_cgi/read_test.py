@@ -7,7 +7,7 @@ import sys
 print("Content-Type: text/plain\r\n\r\n", end="")
 
 try:
-    # 相対パス（ファイル名のみ）で開く
+    # 相対パス（ファイル名のみ）で開く（withで、使い終わったらclose()してくれる）
     with open("target.txt", "r") as f:
         print("Success: " + f.read())
 except FileNotFoundError:

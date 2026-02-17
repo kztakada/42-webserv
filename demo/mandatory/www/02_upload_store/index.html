@@ -16,21 +16,64 @@
       </header>
 
       <section class="card">
-        <form id="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+        <form
+          id="upload-form"
+          action="/upload"
+          method="POST"
+          enctype="multipart/form-data"
+        >
           <div class="panel">
             <div class="panel__title">ファイル選択</div>
             <div id="file-list" class="file-list"></div>
-            <button type="button" id="add-file-btn" class="btn btn-secondary" style="margin-top: 10px; padding: 4px 8px; cursor: pointer;">+ ファイル追加</button>
-          </div>
-          
-          <div class="panel" style="margin-top: 14px;">
-            <div class="panel__title">テキスト入力 (input.txt としてアップロード)</div>
-            <textarea id="text-input" name="text-content" rows="4" style="width: 100%; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border); border-radius: 4px; padding: 8px; box-sizing: border-box;"></textarea>
+            <button
+              type="button"
+              id="add-file-btn"
+              class="btn btn-secondary"
+              style="margin-top: 10px; padding: 4px 8px; cursor: pointer"
+            >
+              + ファイル追加
+            </button>
           </div>
 
-          <div class="panel" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div id="status" class="status-msg" style="font-size: 14px; color: var(--muted);">Ready</div>
-            <button type="submit" style="padding: 8px 16px; cursor: pointer;">Upload</button>
+          <div class="panel" style="margin-top: 14px">
+            <div class="panel__title">
+              テキスト入力 (input.txt としてアップロード)
+            </div>
+            <textarea
+              id="text-input"
+              name="text-content"
+              rows="4"
+              style="
+                width: 100%;
+                background: rgba(0, 0, 0, 0.2);
+                color: white;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 8px;
+                box-sizing: border-box;
+              "
+            ></textarea>
+          </div>
+
+          <div
+            class="panel"
+            style="
+              margin-top: 14px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div
+              id="status"
+              class="status-msg"
+              style="font-size: 14px; color: var(--muted)"
+            >
+              Ready
+            </div>
+            <button type="submit" style="padding: 8px 16px; cursor: pointer">
+              Upload
+            </button>
           </div>
         </form>
       </section>

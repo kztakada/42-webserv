@@ -6,10 +6,10 @@
 namespace http
 {
 
-// RFC 7230で定義されたHTTPプロトコル定数
+// RFC 9112で定義されたHTTPプロトコル定数
 struct HttpSyntax
 {
-    // Message Format (RFC 7230 Section 3)
+    // Message Format (RFC 9112 Section 2)
     static const std::string kCrlf;
     static const std::string kHeaderBoundary;
     static const std::string kHttpVersionPrefix;
@@ -19,7 +19,7 @@ struct HttpSyntax
     static const int kMinorVersionDigitLimit;
     static const int kMaxUriLength;
 
-    // Syntax Elements (RFC 7230 Section 3.2)
+    // Syntax Elements (RFC 9110 Section 5.6.2)
     static const std::string kOWS;  // Optional White Space
     static const std::string kTcharsWithoutAlnum;
 

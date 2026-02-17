@@ -1127,7 +1127,7 @@ Result<size_t> HttpRequest::parse(const utils::Byte* data, size_t len,
             }
 
             // telnet 等で先頭に空行(CRLF)が入ることがある。
-            // RFC 7230 Section 3.5: recipient は "at least one empty line"
+            // RFC 9112 Section 2.2: recipient は "at least one empty line"
             // を無視できる。
             // ただし連続した空行を無制限に許容すると、クライアントが空行だけを
             // 送信し続けた場合にいつまでも応答できないため、1回だけ無視する。

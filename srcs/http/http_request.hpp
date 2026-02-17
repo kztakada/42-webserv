@@ -147,7 +147,7 @@ class HttpRequest
     size_t cursor_;
 
     // request-line 前の先頭空行(CRLF)を許容する回数を管理する。
-    // RFC 7230 Section 3.5 の "at least one empty line"
+    // RFC 9112 Section 2.2 の "at least one empty line"
     // に合わせ、1回までは無視。 連続した空行は不正入力として 400 にする。
     size_t leading_empty_lines_;
 

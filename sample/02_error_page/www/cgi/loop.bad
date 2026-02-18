@@ -1,5 +1,0 @@
-# 500 を確実に踏むための CGI
-# Local Redirect (Location: /...) を返し続けて internal redirect を無限ループさせる。
-# webserv 側の redirect 上限 (kMaxInternalRedirects) に達すると 500 になる。
-
-printf 'Location: /cgi/loop.bad\r\n\r\n'

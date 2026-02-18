@@ -1,7 +1,0 @@
-BasedOnStyle: Google
-IndentWidth: 4
-BreakBeforeBraces: Allman
-AlignAfterOpenBracket: DontAlign
-BinPackArguments: true
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false

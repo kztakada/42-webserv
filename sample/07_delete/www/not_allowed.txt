@@ -1,1 +1,0 @@
-this file should not be deletable by DELETE (method not allowed)

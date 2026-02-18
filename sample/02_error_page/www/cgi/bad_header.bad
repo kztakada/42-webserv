@@ -1,6 +1,0 @@
-# 500 を確実に踏むための CGI
-# CGI ヘッダの1行目を壊して（':' 無し）、webserv 側の CGI ヘッダパースを失敗させる。
-# これにより 500 となり、error_page 500 が適用される。
-
-# ':' が無いので invalid CGI header line になる
-printf 'X-Broken-Header\r\n\r\n'
